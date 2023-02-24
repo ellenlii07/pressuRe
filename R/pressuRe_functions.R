@@ -219,28 +219,34 @@ pressure_interp <- function(pressure_frames, interp_to) {
 
 #' Generate force curve with option to plot
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames. Array. A 3D array covering each timepoint of the
+#' @param pressure_data. List. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 
-force_curve <- function(pressure_frames) {
+force_curve <- function(pressure_data) {
   # check input
-  if (is.array(pressure_frames[[3]]) == FALSE)
+  if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
 
+  # convert to force
+  sens_area <- pressure_data[[2]][1] * pressure_data[[2]][2]
+  force_array <- pressure_data[[1]] * sens_area * 1000
+
   # create empty vector
-  force <- rep(NA, times = dim(pressure_frames)[3])
+  force <- rep(NA, times = dim(force_array)[3])
 
   # find total force for each frame and store in vector
-  for (i in 1:dim(pressure_frames)[3]) {
-    force[i] <- sum(pressure_frames[, , i])
+  for (i in 1:dim(force_array)[3]) {
+    force[i] <- sum(force_array[, , i])
   }
 
   # return
   return(force)
 }
 
+
+# =============================================================================
 
 pressure_curve <- function(pressure_frames) {
   # check input
@@ -253,6 +259,9 @@ pressure_curve <- function(pressure_frames) {
   # return
   return(pressure)
 }
+
+
+# =============================================================================
 
 area_curve <- function(pressure_frames) {
   # check input
