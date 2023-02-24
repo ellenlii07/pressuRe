@@ -3,6 +3,7 @@
 # pressure curve and area curve
 # add frequency and senor dimensions to list
 # add input tests to throw errors
+# interp needs to update time between samples
 
 
 # =============================================================================
@@ -28,8 +29,13 @@ library(tidyverse)
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @param rem_zeros Logical. If TRUE, remove columns and rows from edges which
 #'   contain only zeros
-#' @return List. Array. A 3D array covering each timepoint of the measurement. z
-#'   dimension represents time
+#' @return A list with information about the pressure data.
+#' \itemize{
+#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item sens_size. Numeric vector with two values for the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'  }
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   # test inputs
@@ -54,9 +60,13 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   if (str_detect(time_ln, "ms") == TRUE) {time <- time / 1000}
 
   # Determine dimensions of active sensor array
-  ## determine position breaks, no of frames, y dimension, and frame type
+  ## determine position breaks
   breaks <- grep("Page", pressure_raw)
-  y_dim <- (breaks[2] - breaks[1]) - 13
+
+  ## y dimension
+  y_dim <- (breaks[2] - breaks[1]) - 12
+
+  ## frame types
   frame_type <- pressure_raw[breaks + 8]
 
   # identify and remove any summary frames
@@ -74,12 +84,14 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   tc_frame1 <- textConnection(frame1)
   frame1 <- read.table(tc_frame1, sep = "\t")
   close(tc_frame1)
-  x_dim <- ncol(frame1) - 2
+  x_dim <- ncol(frame1)
+  if (str_detect(pressure_raw[breaks[1] +  10], "Force")) {x_dim = x_dim - 1}
 
-  # make empty array to hold data
+  # create pressure array
+  ## make empty array to hold data
   pressure_array <- array(NA, dim = c(y_dim, x_dim, z_dim))
 
-  # Make a 3D array of frames
+  ## populate 3D array with pressure data
   for (i in seq_along(breaks)) {
     y <- pressure_raw[(breaks[i] + 11):(breaks[i] + 10 + y_dim)]
     tc_y <- textConnection(y)
@@ -89,33 +101,31 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
     close(tc_y)
   }
 
-  # remove force summary rows if present
-  if (str_detect(pressure_raw[breaks[i] +  10], "Force") {
-    pressure_array <- pressure_array[,1:(x_dim - 1),]
-  }
-
   # if required, remove zero columns and rows
-  dims <- dim(pressure_array)
   if (rem_zeros == TRUE) {
-    sens_coords <- sensor_coords(pressure_array)
-    min_x <- min(sens_coords$x_coord)
-    min_x_n <- as.integer((min_x - 0.0025) / 0.005)
-    max_x <- max(sens_coords$x_coord)
-    max_x_n <- as.integer((max_x + 0.0025) / 0.005)
-    min_y <- min(sens_coords$y_coord)
-    min_y_n <- as.integer((min_y - 0.0025) / 0.005)
-    max_y <- max(sens_coords$y_coord)
-    max_y_n <- as.integer((max_y - 0.0025) / 0.005)
-    pressure_array <- pressure_array[(dims[1] - max_y_n):(dims[1] - min_y_n),
-                                     min_x_n:max_x_n, ]
+    # make max footprint
+    fp <- apply(simplify2array(pressure_array), 1:2, max)
+
+    # rows
+    rsums <- rowSums(fp)
+    minr <- min(which(rsums > 0))
+    maxr <- max(which(rsums > 0))
+
+    # columns
+    csums <- colSums(fp)
+    minc <- min(which(csums > 0))
+    maxc <- max(which(csums > 0))
+
+    # update pressure array
+    pressure_array <- pressure_array[minr:maxr, minc:maxc,]
   }
 
   # return emed data
-  return(pressure_array)
+  return(list(pressure_array = pressure_array, sens_size = sens_size, time = time))
 }
 
 
-# load_emed("example_data/emed test.lst")
+# x = load_emed("example_data/emed test.lst")
 
 # =============================================================================
 
@@ -329,13 +339,13 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
 
 footprint <- function(pressure_frames, value = "max", frame, plot = FALSE) {
   if (value == "max") {
-    mat <- apply(simplify2array(pressure_frames), 1:2, max)
+    mat <- apply(simplify2array(pressure_frames[[3]]), 1:2, max)
   }
   if (value == "mean") {
-    mat <- apply(simplify2array(pressure_frames), 1:2, mean)
+    mat <- apply(simplify2array(pressure_frames[[3]]), 1:2, mean)
   }
   if (value == "frame") {
-    mat <- pressure_frames[,, frame]
+    mat <- pressure_frames[[3]][,, frame]
   }
 
   # plot if requested
