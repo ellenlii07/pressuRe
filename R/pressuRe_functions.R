@@ -44,7 +44,7 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   if (is.logical(rem_zeros) == FALSE)
     stop("rem_zeros needs to be a logical value")
 
-  # Read unformated emed data
+  # Read unformatted emed data
   pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
   # get sensor size
@@ -59,17 +59,14 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   time <- as.numeric(unlist(str_extract_all(time_ln, "\\d+\\.\\d+")))
   if (str_detect(time_ln, "ms") == TRUE) {time <- time / 1000}
 
-  # Determine dimensions of active sensor array
+  # remove summary frames
   ## determine position breaks
   breaks <- grep("Page", pressure_raw)
-
-  ## y dimension
-  y_dim <- (breaks[2] - breaks[1]) - 12
 
   ## frame types
   frame_type <- pressure_raw[breaks + 8]
 
-  # identify and remove any summary frames
+  ## identify and remove any summary frames
   MVP <- which(grepl("MVP", frame_type, fixed = TRUE))
   MPP <- which(grepl("MPP", frame_type, fixed = TRUE))
   if (length(MVP) == 0 && length(MPP) == 0) {
@@ -78,14 +75,23 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
     breaks <- breaks[-c(MVP, MPP)]
   }
 
-  # determine x and z dimensions
+  # pressure frame dimensions
+  ## get z dimension
   z_dim <- length(breaks)
-  frame1 <- pressure_raw[(breaks[2] - 3):(breaks[1] + 11)]
+
+  ## make sample frame
+  frame1 <- pressure_raw[(breaks[1] + 11):(breaks[2] - 2)]
   tc_frame1 <- textConnection(frame1)
   frame1 <- read.table(tc_frame1, sep = "\t")
   close(tc_frame1)
-  x_dim <- ncol(frame1)
+
+  ## get x dimension (number of columns)
+  x_dim <- ncol(frame1) - 1 # -1 is to account for row number
   if (str_detect(pressure_raw[breaks[1] +  10], "Force")) {x_dim = x_dim - 1}
+
+  ## y dimension (number of rows)
+  y_dim <- (breaks[2] - breaks[1]) - 12
+  if (str_detect(pressure_raw[breaks[2] - 2], "Force")) {y_dim = y_dim - 1}
 
   # create pressure array
   ## make empty array to hold data
@@ -96,7 +102,7 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
     y <- pressure_raw[(breaks[i] + 11):(breaks[i] + 10 + y_dim)]
     tc_y <- textConnection(y)
     y <- read.table(tc_y, sep = "\t")
-    y <- y[2:(x_dim + 1)]
+    y <- y[, 2:(x_dim + 1)]
     pressure_array[,, i] <- as.matrix(y)
     close(tc_y)
   }
@@ -337,7 +343,7 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
 
 #' Find footprint of pressure file
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param value String. "max" = footprint of maximum sensors. "mean" = average
 #'   value of sensors over time (usually for static analyses). "frame" = an individual frame
@@ -346,15 +352,15 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
 #' @return Matrix. Maximum or mean values for all sensors
 #' @example
 
-footprint <- function(pressure_frames, value = "max", frame, plot = FALSE) {
+footprint <- function(pressure_data, value = "max", frame, plot = FALSE) {
   if (value == "max") {
-    mat <- apply(simplify2array(pressure_frames[[3]]), 1:2, max)
+    mat <- apply(simplify2array(pressure_data[[1]]), 1:2, max)
   }
   if (value == "mean") {
-    mat <- apply(simplify2array(pressure_frames[[3]]), 1:2, mean)
+    mat <- apply(simplify2array(pressure_data[[1]]), 1:2, mean)
   }
   if (value == "frame") {
-    mat <- pressure_frames[[3]][,, frame]
+    mat <- pressure_frames[[1]][,, frame]
   }
 
   # plot if requested
@@ -369,7 +375,7 @@ footprint <- function(pressure_frames, value = "max", frame, plot = FALSE) {
 
 #' Produce plot of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param value String. "max" = footprint of maximum sensors. "mean" = average
 #'   value of sensors over time (usually for static analyses). "frame" = an
@@ -381,41 +387,41 @@ footprint <- function(pressure_frames, value = "max", frame, plot = FALSE) {
 #' @param sens_y Numeric. Dimension of sensor in y direction, equivalent to row
 #'   height in pressure matrix
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
-#' @param plot_outline Logical. If TRUE, overlay convext hull outline on plot
+#' @param plot_outline Logical. If TRUE, overlay convex hull outline on plot
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @return ggplot plot object
 
-plot_pressure <- function(pressure_frames, value = "max", frame, interp = FALSE,
+plot_pressure <- function(pressure_data, value = "max", frame, interp = FALSE,
                            sens_x = 0.005, sens_y = 0.005, plot_COP = FALSE,
                            plot_outline = FALSE, plot = TRUE) {
   # if necessary, generate pressure matrix
-  if (length(dim(pressure_frames)) == 3) {
-    pressure_matrix <- footprint(pressure_frames, value, frame)
+  if (length(dim(pressure_data[[1]])) == 3) {
+    pressure_frame <- footprint(pressure_data, value, frame)
   } else {
-    pressure_matrix <- pressure_frames
+    pressure_frame <- pressure_data[[1]]
   }
 
   # interpolate if required
   if (interp == TRUE) {
-    f_print2 <- matrix(rep(NA, (nrow(pressure_matrix) * ncol(pressure_matrix) * 5)),
-                       nrow = nrow(pressure_matrix), ncol = ncol(pressure_matrix) * 5)
-    for (i in 1:nrow(pressure_matrix)) {
-      xa <- approx(pressure_matrix[i, ], n = 5 * ncol(pressure_matrix))
+    f_print2 <- matrix(rep(NA, (nrow(pressure_frame) * ncol(pressure_frame) * 5)),
+                       nrow = nrow(pressure_frame), ncol = ncol(pressure_frame) * 5)
+    for (i in 1:nrow(pressure_frame)) {
+      xa <- approx(pressure_frame[i, ], n = 5 * ncol(pressure_frame))
       f_print2[i, ] <- xa$y
     }
 
     #Increase number of rows
-    f_print3 <- matrix(rep(NA, (nrow(pressure_matrix) * 5 * ncol(pressure_matrix) * 5)),
-                       nrow = nrow(pressure_matrix) * 5, ncol = ncol(pressure_matrix) * 5)
+    f_print3 <- matrix(rep(NA, (nrow(pressure_frame) * 5 * ncol(pressure_frame) * 5)),
+                       nrow = nrow(pressure_frame) * 5, ncol = ncol(pressure_frame) * 5)
     for (i in 1:ncol(f_print2)) {
       xa <- approx(f_print2[ ,i], n = 5 * nrow(f_print2))
       f_print3[ ,i] <- xa$y
     }
-    pressure_matrix <- f_print3
+    pressure_frame <- f_print3
   }
 
   # generate coordinates for each sensor
-  dims <- dim(pressure_matrix)
+  dims <- dim(pressure_frame)
   x_cor <- seq(from = (sens_x / 2), by = sens_x, length.out = dims[2])
   x_cor <- rep(x_cor, each = dims[1])
   y_cor <- seq(from = (sens_y / 2) + ((dims[1] - 1) * sens_y),
@@ -423,7 +429,7 @@ plot_pressure <- function(pressure_frames, value = "max", frame, interp = FALSE,
   y_cor <- rep(y_cor, times = dims[2])
 
   # combine with pressure values
-  cor <- cbind(x_cor, y_cor, as.vector(pressure_matrix))
+  cor <- cbind(x_cor, y_cor, as.vector(pressure_frame))
   cor <- as.data.frame(cor)
   colnames(cor) <- c("x", "y", "value")
 
@@ -455,13 +461,13 @@ plot_pressure <- function(pressure_frames, value = "max", frame, interp = FALSE,
 
   # add COP?
   if (plot_COP == TRUE) {
-    cop_df <- gen_cop(pressure_frames)
+    cop_df <- gen_cop(pressure_data[[1]])
     g <- g + geom_point(data = cop_df, aes(x = x_coord, y = y_coord))
   }
 
   # add outline
   if (plot_outline == TRUE) {
-    ch_out <- footprint_outline(pressure_frames)
+    ch_out <- footprint_outline(pressure_data[[1]])
     g <- g + geom_path(data = ch_out, aes(x = x_coord, y = y_coord),
                        colour = "black")
     g <- g + geom_point(data = ch_out, aes(x = x_coord, y = y_coord),
@@ -469,15 +475,7 @@ plot_pressure <- function(pressure_frames, value = "max", frame, interp = FALSE,
   }
 
   # formatting
-  g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
-                 axis.text.y = element_blank(), axis.ticks = element_blank(),
-                 axis.title.x = element_blank(),
-                 axis.title.y = element_blank(),
-                 panel.background = element_blank(),
-                 panel.border = element_blank(),
-                 panel.grid.major = element_blank(),
-                 panel.grid.minor = element_blank(),
-                 legend.position = "none")
+  g <- g + theme_void() + theme(legend.position = "none")
 
   # display plot immediately if requested
   if (plot == TRUE) {print(g)}
