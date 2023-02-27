@@ -2,6 +2,7 @@
 # check force curve is data in N?
 # add input tests to throw errors
 # interp needs to update time between samples and return list
+# pti to pressure curve function
 
 
 # =============================================================================
@@ -313,6 +314,10 @@ pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
     if (variable == "peak") {
       pressure[i] <- max(pressure_array[, , i])
     }
+    if (variable == "mean") {
+      active_sens <- which(pressure_array[, , i] > 0, arr.ind = TRUE)
+      pressure[i] <- mean(pressure_array[active_sens[, 1], active_sens[, 2], i])
+    }
   }
 
   # plot, if required
@@ -334,7 +339,7 @@ pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
   return(pressure)
 }
 
-pressure_curve(pressure_data, plot = TRUE)
+# pressure_curve(pressure_data, variable = "peak", plot = TRUE)
 
 
 # =============================================================================
