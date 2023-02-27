@@ -3,6 +3,8 @@
 # add input tests to throw errors
 # interp needs to update time between samples and return list
 # pti to pressure curve function
+# plot_pressure option to choose different colors
+# use sensor coordinate function in other plot functions
 
 
 # =============================================================================
@@ -409,6 +411,10 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 #' cop(pressure_data)
 
 cop <- function(pressure_data) {
+  # check input
+  if (is.array(pressure_data[[1]]) == FALSE)
+    stop("pressure_frames input must contain an array")
+
   # array dimensions
   x <- pressure_data[[1]]
   dims <- dim(x)
@@ -456,31 +462,42 @@ cop <- function(pressure_data) {
 
 # =============================================================================
 
+# =============================================================================
+
 #' Find footprint of pressure file
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param value String. "max" = footprint of maximum sensors. "mean" = average
-#'   value of sensors over time (usually for static analyses).
-#'   "frame" = an individual frame
-#' @param frame Integer.
+#' @param variable String. "max" = maximum value of each sensor across full
+#' dataset. "mean" = average value of sensors over full dataset."frame" = an
+#' individual pressure frame
+#' @param frame Integer. Only used if variable = "frame".
 #' @param plot Logical. Display pressure image
 #' @return Matrix. Maximum or mean values for all sensors
 #' @example
+#' footprint(pressure_data, plot = TRUE)
 
-footprint <- function(pressure_data, value = "max", frame, plot = FALSE) {
-  if (value == "max") {
+footprint <- function(pressure_data, variable = "max", frame, plot = FALSE) {
+  # check input
+  if (is.array(pressure_data[[1]]) == FALSE)
+    stop("pressure_frames input must contain an array")
+  stopifnot("Unknown Variable" = variable %in% c("max", "mean", "frame"))
+  if (variable == "frame" & missing(frame))
+    stop("For a single frame, a value is needed for frame variable")
+
+  # calculate footprint for different variables
+  if (variable == "max") {
     mat <- apply(simplify2array(pressure_data[[1]]), 1:2, max)
   }
-  if (value == "mean") {
+  if (variable == "mean") {
     mat <- apply(simplify2array(pressure_data[[1]]), 1:2, mean)
   }
-  if (value == "frame") {
+  if (variable == "frame") {
     mat <- pressure_frames[[1]][,, frame]
   }
 
   # plot if requested
-  if (plot == TRUE) {g <- plot_footprint(mat)}
+  if (plot == TRUE) {g <- plot_pressure(mat)}
 
   # return footprint
   return(mat)
@@ -493,83 +510,84 @@ footprint <- function(pressure_data, value = "max", frame, plot = FALSE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param value String. "max" = footprint of maximum sensors. "mean" = average
+#' @param variable String. "max" = footprint of maximum sensors. "mean" = average
 #'   value of sensors over time (usually for static analyses). "frame" = an
 #'   individual frame
 #' @param frame Integer.
-#' @param interp Logical. If data should be interpolated to produce a clearer image
-#' @param sens_x Numeric. Dimension of sensor in x direction, equivalent to
-#'   column width in pressure matrix
-#' @param sens_y Numeric. Dimension of sensor in y direction, equivalent to row
-#'   height in pressure matrix
+#' @param smooth Logical. If TRUE, plot will interpolate between sensors to
+#' increase data density
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
 #' @param plot_outline Logical. If TRUE, overlay convex hull outline on plot
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @return ggplot plot object
+#' @examples
+#' plot_pressure(pressure_data, variable = "max")
 
-plot_pressure <- function(pressure_data, value = "max", frame, interp = FALSE,
-                           sens_x = 0.005, sens_y = 0.005, plot_COP = FALSE,
-                           plot_outline = FALSE, plot = TRUE) {
-  # if necessary, generate pressure matrix
-  if (length(dim(pressure_data[[1]])) == 3) {
-    pressure_frame <- footprint(pressure_data, value, frame)
-  } else {
-    pressure_frame <- pressure_data[[1]]
-  }
+plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
+                          plot_COP = FALSE, plot_outline = FALSE,
+                          plot = TRUE) {
+  # check inputs
+  if (is.array(pressure_data[[1]]) == FALSE)
+    stop("pressure data must contain array")
+
+  # get footprint
+  fp <- footprint(pressure_data, variable = variable)
+  fp_rows <- nrow(fp)
+  fp_cols <- ncol(fp)
 
   # interpolate if required
-  if (interp == TRUE) {
-    f_print2 <- matrix(rep(NA, (nrow(pressure_frame) * ncol(pressure_frame) * 5)),
-                       nrow = nrow(pressure_frame), ncol = ncol(pressure_frame) * 5)
-    for (i in 1:nrow(pressure_frame)) {
-      xa <- approx(pressure_frame[i, ], n = 5 * ncol(pressure_frame))
+  if (smooth == TRUE) {
+    f_print2 <- matrix(rep(NA, (fp_rows * fp_cols * 5)),
+                       nrow = fp_rows, fp_cols * 5)
+    for (i in 1:nrow(fp)) {
+      xa <- approx(fp[i, ], n = 5 * fp_cols)
       f_print2[i, ] <- xa$y
     }
 
-    #Increase number of rows
-    f_print3 <- matrix(rep(NA, (nrow(pressure_frame) * 5 * ncol(pressure_frame) * 5)),
-                       nrow = nrow(pressure_frame) * 5, ncol = ncol(pressure_frame) * 5)
+    # Increase number of rows
+    f_print3 <- matrix(rep(NA, fp_rows * 5 * fp_cols * 5),
+                       nrow = fp_rows * 5, fp_cols * 5)
     for (i in 1:ncol(f_print2)) {
       xa <- approx(f_print2[ ,i], n = 5 * nrow(f_print2))
       f_print3[ ,i] <- xa$y
     }
-    pressure_frame <- f_print3
+    fp <- f_print3
   }
 
   # generate coordinates for each sensor
-  dims <- dim(pressure_frame)
-  x_cor <- seq(from = (sens_x / 2), by = sens_x, length.out = dims[2])
-  x_cor <- rep(x_cor, each = dims[1])
-  y_cor <- seq(from = (sens_y / 2) + ((dims[1] - 1) * sens_y),
-               by = sens_y * -1, length.out = dims[1])
-  y_cor <- rep(y_cor, times = dims[2])
+  sens_coords <- sensor_coords(pressure_data)
+
+  # overall dimensions of array
+  dims <- dim(pressure_array)
 
   # combine with pressure values
-  cor <- cbind(x_cor, y_cor, as.vector(pressure_frame))
+  cor <- cbind(sens_coords, as.vector(fp))
   cor <- as.data.frame(cor)
   colnames(cor) <- c("x", "y", "value")
 
-  # add colours
-  colour <- c()
+  # add colors
   plot_cs <- list(cs_breaks = c(0, 15, 40, 60, 100, 150, 220, 300, 5000),
                   cs_cols = c("white", "grey", "blue", "light blue",
                               "green", "yellow", "red", "deeppink"))
   cols <- unlist(plot_cs[[2]])
-  colour <- c()
-  for (i in 1:(dims[1] * dims[2])) {
-    for (j in seq_along(plot_cs[[1]])) {
-      if(cor$value[i] >= plot_cs[[1]][j] & cor$value[i] < plot_cs[[1]][j + 1]) {
-        colour = append(colour, j)
-      }
-    }
+  color <- rep(NA, times = nrow(cor))
+  for (i in 1:nrow(cor)) {
+    if (cor$value[i] < 15) {color[i] = 1}
+    if (cor$value[i] >= 15 && cor$value[i] < 40) {color[i] = 2}
+    if (cor$value[i] >= 40 && cor$value[i] < 60) {color[i] = 3}
+    if (cor$value[i] >= 60 && cor$value[i] < 100) {color[i] = 4}
+    if (cor$value[i] >= 100 && cor$value[i] < 150) {color[i] = 5}
+    if (cor$value[i] >= 150 && cor$value[i] < 220) {color[i] = 6}
+    if (cor$value[i] >= 220 && cor$value[i] < 300) {color[i] = 7}
+    if (cor$value[i] >= 300) {color[i] = 8}
   }
 
   # combine with data frame
-  cor <- cbind(cor, colour)
+  cor <- cbind(cor, color)
 
   ## plot
   g <- ggplot()
-  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = as.factor(colour)))
+  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = as.factor(color)))
   g <- g + scale_fill_manual(values = cols)
   g <- g + scale_x_continuous(expand = c(0, 0))
   g <- g + scale_y_continuous(expand = c(0, 0))
@@ -577,13 +595,13 @@ plot_pressure <- function(pressure_data, value = "max", frame, interp = FALSE,
 
   # add COP?
   if (plot_COP == TRUE) {
-    cop_df <- gen_cop(pressure_data[[1]])
+    cop_df <- gen_cop(pressure_data)
     g <- g + geom_point(data = cop_df, aes(x = x_coord, y = y_coord))
   }
 
   # add outline
   if (plot_outline == TRUE) {
-    ch_out <- footprint_outline(pressure_data[[1]])
+    ch_out <- footprint_outline(pressure_data)
     g <- g + geom_path(data = ch_out, aes(x = x_coord, y = y_coord),
                        colour = "black")
     g <- g + geom_point(data = ch_out, aes(x = x_coord, y = y_coord),
@@ -592,98 +610,6 @@ plot_pressure <- function(pressure_data, value = "max", frame, interp = FALSE,
 
   # formatting
   g <- g + theme_void() + theme(legend.position = "none")
-
-  # display plot immediately if requested
-  if (plot == TRUE) {print(g)}
-
-  # return ggplot object
-  return(g)
-}
-
-plot_sensor <- function(pressure_frames, value = "max", frame, interp = FALSE,
-                        sens_x = 0.005, sens_y = 0.005, plot_COP = FALSE,
-                        plot_outline = FALSE, plot = TRUE) {
-  # if necessary, generate pressure matrix
-  if (length(dim(pressure_frames)) == 3) {
-    pressure_matrix <- footprint(pressure_frames, value, frame)
-  } else {
-    pressure_matrix <- pressure_frames
-  }
-
-  # interpolate if required
-  if (interp == TRUE) {
-    f_print2 <- matrix(rep(NA, (nrow(pressure_matrix) * ncol(pressure_matrix) * 5)),
-                       nrow = nrow(pressure_matrix), ncol = ncol(pressure_matrix) * 5)
-    for (i in 1:nrow(pressure_matrix)) {
-      xa <- approx(pressure_matrix[i, ], n = 5 * ncol(pressure_matrix))
-      f_print2[i, ] <- xa$y
-    }
-
-    #Increase number of rows
-    f_print3 <- matrix(rep(NA, (nrow(pressure_matrix) * 5 * ncol(pressure_matrix) * 5)),
-                       nrow = nrow(pressure_matrix) * 5, ncol = ncol(pressure_matrix) * 5)
-    for (i in 1:ncol(f_print2)) {
-      xa <- approx(f_print2[ ,i], n = 5 * nrow(f_print2))
-      f_print3[ ,i] <- xa$y
-    }
-    pressure_matrix <- f_print3
-  }
-
-  # generate coordinates for each sensor
-  dims <- dim(pressure_matrix)
-  x_cor <- seq(from = (sens_x / 2), by = sens_x, length.out = dims[2])
-  x_cor <- rep(x_cor, each = dims[1])
-  y_cor <- seq(from = (sens_y / 2) + ((dims[1] - 1) * sens_y),
-               by = sens_y * -1, length.out = dims[1])
-  y_cor <- rep(y_cor, times = dims[2])
-
-  # combine with pressure values
-  cor <- cbind(x_cor, y_cor, as.vector(pressure_matrix))
-  cor <- as.data.frame(cor)
-  colnames(cor) <- c("x", "y", "value")
-
-  # add colours
-  #colour <- c()
-  #plot_cs <- list(cs_breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80),
-  #                cs_cols = c("white", "grey", "blue", "light blue",
-  #                            "green", "yellow", "red", "deeppink"))
-  #cols <- unlist(plot_cs[[2]])
-  #colour <- c()
-  #for (i in 1:(dims[1] * dims[2])) {
-  #  for (j in seq_along(plot_cs[[1]])) {
-  #    if(cor$value[i] >= plot_cs[[1]][j] & cor$value[i] < plot_cs[[1]][j + 1]) {
-  #      colour = append(colour, j)
-  #    }
-  #  }
-  #}
-
-  # combine with data frame
-  #cor <- cbind(cor, colour)
-
-  ## plot
-  g <- ggplot()
-  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = value))
-  #g <- g + scale_fill_manual(values = cols)
-  g <- g + scale_fill_continuous(name = "Pressure (kPa)")
-  g <- g + scale_x_continuous(expand = c(0, 0))
-  g <- g + scale_y_continuous(expand = c(0, 0))
-  g <- g + coord_fixed()
-
-  # add COP?
-  if (plot_COP == TRUE) {
-    cop_df <- gen_cop(pressure_frames)
-    g <- g + geom_point(data = cop_df, aes(x = x_coord, y = y_coord))
-  }
-
-  # formatting
-  g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
-                 axis.text.y = element_blank(), axis.ticks = element_blank(),
-                 axis.title.x = element_blank(),
-                 axis.title.y = element_blank(),
-                 panel.background = element_blank(),
-                 panel.border = element_blank(),
-                 panel.grid.major = element_blank(),
-                 panel.grid.minor = element_blank())
 
   # display plot immediately if requested
   if (plot == TRUE) {print(g)}
@@ -854,8 +780,10 @@ select_region <- function(pressure_frames, image_value = "max",
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
 #' @return Numeric. CPEI value
+#' @examples
+#' cpei(pressure_data, side = "right", plot = TRUE)
 
-cpei <- function(pressure_frames, side, plot_result = FALSE) {
+cpei <- function(pressure_data, side, plot_result = FALSE) {
   ## geometry helper functions
   # Finds the intersection point of a line from a point perpendicular to
   # another line
@@ -1084,31 +1012,30 @@ footprint_outline <- function(pressure_frames, sens_x = 0.005,
 
 #' Coordinates of active sensors
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param sens_x Numeric. Dimension of sensor in x direction, equivalent to
-#'   column width in pressure matrix
-#' @param sens_y Numeric. Dimension of sensor in y direction, equivalent to row
-#'   height in pressure matrix
-#' @param threshold Numeric. Level required to consider sensor active
-#' @return Data frame. Includes number, x and y cordinates of sensors
+#' @return Data frame. x and y coordinates of sensors
+#' @examples
+#' sensor_coords(pressure_data)
 
-sensor_coords <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005,
-                          threshold = 5) {
+sensor_coords <- function(pressure_data) {
   # max pressure footprint
-  max_fp <- footprint(pressure_frames)
+  max_fp <- footprint(pressure_data)
+
+  # dimensions
+  sens_x <- pressure_data[[2]][1]
+  sens_y <- pressure_data[[2]][2]
 
   # data frame with active sensors as coordinates
-  P <- c(max_fp)
+  #P <- c(max_fp)
   x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
   x_cor <- rep(x_cor, each = nrow(max_fp))
   y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
                by = (-1 * sens_y), length.out = nrow(max_fp))
   y_cor <- rep(y_cor, times = ncol(max_fp))
-  coords <- data.frame(Sens_No = 1:length(x_cor), x_coord = x_cor,
-                       y_coord = y_cor, P = P)
-  coords <- coords[which(P >= 5), ]
-  coords <- coords[, 1:3]
+  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)#, P = P)
+  #coords <- coords[which(P >= 5), ]
+  #coords <- coords[, 1:3]
 
   # return sensor coordinates
   return(coords)
@@ -1199,5 +1126,5 @@ gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
 #file_path <- "C:/Users/telfe/Dropbox/My_Projects/Twinfoot/data/TWINFOOT001A/static.lst"
 #pressure_frames <- load_emed(file_path, flip = TRUE)
 #plot_footprint(pressure_frames, plot_COP = TRUE, plot_outline = TRUE)
-#cpei(pressure_frames, side = "right", plot = TRUE)
+#
 
