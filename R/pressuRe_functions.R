@@ -1,9 +1,7 @@
 # to do
 # check force curve is data in N?
-# pressure curve and area curve
-# add frequency and senor dimensions to list
 # add input tests to throw errors
-# interp needs to update time between samples
+# interp needs to update time between samples and return list
 
 
 # =============================================================================
@@ -131,7 +129,24 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 }
 
 
-# x = load_emed("example_data/emed test.lst")
+# pressure_data = load_emed("example_data/emed test.lst")
+
+# =============================================================================
+
+#' Load fscan data
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_filepath String. Filepath pointing to emed pressure file
+#' @return A list with information about the pressure data.
+#' \itemize{
+#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item sens_size. Numeric vector with two values for the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'  }
+load_fscan <- function(pressure_filepath) {
+
+}
+
 
 # =============================================================================
 
@@ -185,13 +200,13 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #' Interpolate pressure data. Useful for normalizing to stance phase, for example
 #' @author Scott Telfer
 #' \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
-#'   measurement. z dimension represents time.
+#' @param pressure_data List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time.
 #' @param interp_to Number of frames to interpolate to
 
-pressure_interp <- function(pressure_frames, interp_to) {
+pressure_interp <- function(pressure_data, interp_to) {
   # check inputs
-  if (is.array(pressure_frames[[3]]) == FALSE)
+  if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
   if (is.numeric(interp_to) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -209,10 +224,11 @@ pressure_interp <- function(pressure_frames, interp_to) {
   }
 
   # interpolate array
-  array_dim <- dim(pressure_frames)
+  array_dim <- dim(pressure_data[[1]])
+  pressure_array <- pressure_data[[1]]
   for (i in 1:array_dim[1]) {
     for (j in 1:array_dim[2]) {
-      interp_array[i, j, ] <- approxP(pressure_frames[i, j, ], interp_to)
+      interp_array[i, j, ] <- approxP(pressure_data[i, j, ], interp_to)
     }
   }
 
@@ -230,7 +246,7 @@ pressure_interp <- function(pressure_frames, interp_to) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 
-force_curve <- function(pressure_data) {
+force_curve <- function(pressure_data, plot = FALSE) {
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -247,39 +263,133 @@ force_curve <- function(pressure_data) {
     force[i] <- sum(force_array[, , i])
   }
 
+  # plot, if required
+  if (plot == TRUE) {
+    # make df
+    force_df <- data.frame(force = force,
+                           time = seq(0, by = pressure_data[[3]],
+                                      length.out = length(force)))
+
+    # plot
+    g <- ggplot(force_df, aes(x = time, y = force))
+    g <- g + geom_line()
+    g <- g + theme_bw()
+    g <- g + xlab("time (s)") + ylab("Force (N)")
+    print(g)
+  }
+
   # return
   return(force)
 }
 
+#force_curve(pressure_data, plot = TRUE)
+
 
 # =============================================================================
 
-pressure_curve <- function(pressure_frames) {
+#' Generate pressure curve with option to plot
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data. List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time
+#' @param variable. String. Whether "peak", "mean", or "pti" should be used
+#' @param plot Logical. If TRUE also plots data as line curve
+#' @return Numeric vector containing force values
+
+pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
   # check input
-  if (is.array(pressure_frames[[3]]) == FALSE)
+  if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
+  if (is.character(variable) == FALSE)
+    stop("variable parameter must be a string")
+
+  # pressure array
+  pressure_array <- pressure_data[[1]]
 
   # create empty vector
-  pressure <- rep(NA, times = dim(pressure_frames)[3])
+  pressure <- rep(NA, times = dim(pressure_array)[3])
+
+  # find pressure for each frame and store in vector
+  for (i in 1:dim(pressure_array)[3]) {
+    if (variable == "peak") {
+      pressure[i] <- max(pressure_array[, , i])
+    }
+  }
+
+  # plot, if required
+  if (plot == TRUE) {
+    # make df
+    pressure_df <- data.frame(pressure = pressure,
+                              time = seq(0, by = pressure_data[[3]],
+                                         length.out = length(pressure)))
+
+    # plot
+    g <- ggplot(pressure_df, aes(x = time, y = pressure))
+    g <- g + geom_line()
+    g <- g + theme_bw()
+    g <- g + xlab("time (s)") + ylab("Pressure (kPa)")
+    print(g)
+  }
 
   # return
   return(pressure)
 }
 
+pressure_curve(pressure_data, plot = TRUE)
+
 
 # =============================================================================
 
-area_curve <- function(pressure_frames) {
+#' Generate contact area curve with option to plot
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data. List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time
+#' @param threshold. Numeric. The minimum pressure required for a sensor to be
+#' considered active
+#' @param plot Logical. If TRUE also plots data as line curve
+#' @return Numeric vector containing force values
+
+area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
   # check input
-  if (is.array(pressure_frames[[3]]) == FALSE)
+  if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
+  if (is.numeric(threshold) == FALSE)
+    stop("threshold must be a numeric value")
+
+  # pressure array
+  pressure_array <- pressure_data[[1]]
 
   # create empty vector
-  area <- rep(NA, times = dim(pressure_frames)[3])
+  area <- rep(NA, times = dim(pressure_array)[3])
+
+  # sensor size
+  sen_size <- pressure_data[[2]][1] * pressure_data[[2]][2]
+
+  # find active area for each frame and store in vector
+  for (i in 1:dim(pressure_array)[3]) {
+    area[i] <- (sum(pressure_array[, , i] > threshold)) * sen_size
+  }
+
+  # plot if requested
+  if (plot == TRUE) {
+    # make df
+    area_df <- data.frame(area = area,
+                          time = seq(0, by = pressure_data[[3]],
+                                     length.out = length(area)))
+
+    # plot
+    g <- ggplot(area_df, aes(x = time, y = area))
+    g <- g + geom_line()
+    g <- g + theme_bw()
+    g <- g + xlab("time (s)") + ylab("Area (m^2)")
+    print(g)
+  }
 
   # return
   return(area)
 }
+
+#area_curve(pressure_data, plot = TRUE)
+
 
 # =============================================================================
 
