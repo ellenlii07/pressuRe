@@ -35,6 +35,8 @@ library(tidyverse)
 #'   \item sens_size. Numeric vector with two values for the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'  }
+#' @examples
+#' pressure_data = load_emed("example_data/emed test.lst")
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   # test inputs
@@ -130,8 +132,6 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 }
 
 
-# pressure_data = load_emed("example_data/emed test.lst")
-
 # =============================================================================
 
 #' Load fscan data
@@ -204,6 +204,8 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time.
 #' @param interp_to Number of frames to interpolate to
+#' @examples
+#' pressure_interp(pressure_data, 101)
 
 pressure_interp <- function(pressure_data, interp_to) {
   # check inputs
@@ -246,6 +248,8 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   measurement. z dimension represents time
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
+#' @examples
+#' force_curve(pressure_data, plot = TRUE)
 
 force_curve <- function(pressure_data, plot = FALSE) {
   # check input
@@ -283,8 +287,6 @@ force_curve <- function(pressure_data, plot = FALSE) {
   return(force)
 }
 
-#force_curve(pressure_data, plot = TRUE)
-
 
 # =============================================================================
 
@@ -295,8 +297,11 @@ force_curve <- function(pressure_data, plot = FALSE) {
 #' @param variable. String. Whether "peak", "mean", or "pti" should be used
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
+#' @examples
+#' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
 
-pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
+pressure_curve <- function(pressure_frames, variable = "peak",
+                           plot = FALSE) {
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -339,8 +344,6 @@ pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
   return(pressure)
 }
 
-# pressure_curve(pressure_data, variable = "peak", plot = TRUE)
-
 
 # =============================================================================
 
@@ -352,6 +355,7 @@ pressure_curve <- function(pressure_frames, variable = "peak", plot = FALSE) {
 #' considered active
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
+#' @examples area_curve(pressure_data, plot = TRUE)
 
 area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
   # check input
@@ -393,21 +397,24 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
   return(area)
 }
 
-#area_curve(pressure_data, plot = TRUE)
-
 
 # =============================================================================
 
 #' Generate center of pressure coordinates
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement. z dimension represents time
 #' @return Data frame with x and y coordinates of COP throughout trial
+#' @examples
+#' cop(pressure_data)
 
-cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
+cop <- function(pressure_data) {
   # array dimensions
-  x <- pressure_frames
+  x <- pressure_data[[1]]
   dims <- dim(x)
+
+  # individual sensor dimensions
+  sens_dim <- pressure_data[[2]]
 
   # loading totals by column
   col_total <- data.frame(matrix(NA, nrow = dims[2], ncol = dims[3]))
@@ -418,10 +425,11 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
   for (i in 1:dims[3]) {row_total[, i] <- rowSums(x[, , i])}
 
   # Sensor spacing in x direction
-  sens_spacing_x <- seq(from = sens_x / 2, by = sens_x, length.out = dims[2])
+  sens_spacing_x <- seq(from = sens_dim[1] / 2, by = sens_dim[1],
+                        length.out = dims[2])
 
   # Sensor spacing in y direction
-  sens_spacing_y <- rev(seq(from = sens_y / 2, by = sens_y,
+  sens_spacing_y <- rev(seq(from = sens_dim[2] / 2, by = sens_dim[2],
                             length.out = dims[1]))
 
   # COP coordinates in x direction
@@ -436,14 +444,6 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
   for (i in 1:dims[3]) {
     p_total <- sum(row_total[, i])
     y_coord[i] <- (sum(sens_spacing_y * row_total[, i])) / p_total
-  }
-
-  # interpolate if required
-  if (hasArg(interpol) == TRUE) {
-    x_coord <- approx(x_coord, n = interpol)
-    x_coord <- x_coord$y
-    y_coord <- approx(y_coord, n = interpol)
-    y_coord <- y_coord$y
   }
 
   # combine coordinates into dataframe
@@ -461,7 +461,8 @@ cop <- function(pressure_frames, sens_x = 0.005, sens_y = 0.005) {
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param value String. "max" = footprint of maximum sensors. "mean" = average
-#'   value of sensors over time (usually for static analyses). "frame" = an individual frame
+#'   value of sensors over time (usually for static analyses).
+#'   "frame" = an individual frame
 #' @param frame Integer.
 #' @param plot Logical. Display pressure image
 #' @return Matrix. Maximum or mean values for all sensors
