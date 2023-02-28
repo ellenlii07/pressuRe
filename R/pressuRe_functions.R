@@ -1,10 +1,11 @@
 # to do
 # check force curve is data in N?
 # add input tests to throw errors
-# interp needs to update time between samples and return list
 # pti to pressure curve function
 # plot_pressure option to choose different colors
 # use sensor coordinate function in other plot functions
+# pedar import
+# fscan import
 
 
 # =============================================================================
@@ -136,6 +137,12 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 
 # =============================================================================
 
+load_pedar <- function(pressure_filepath) {
+
+}
+
+# =============================================================================
+
 #' Load fscan data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
@@ -206,6 +213,12 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time.
 #' @param interp_to Number of frames to interpolate to
+#' @return
+#' \itemize{
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
 #' @examples
 #' pressure_interp(pressure_data, 101)
 
@@ -216,9 +229,9 @@ pressure_interp <- function(pressure_data, interp_to) {
   if (is.numeric(interp_to) == FALSE)
     stop("pressure_frames input must contain an array")
 
-  # make new array
-  interp_array <- array(NA, dim = c(nrow(pressure_frames),
-                                    ncol(pressure_frames), interp_to))
+  # make new empty array
+  dims <- dim(pressure_data[[1]])
+  interp_array <- array(NA, dim = c(dims[1]), dims[2], interp_to)
 
   # interpolation function
   approxP <- function(x, interp_to) {
@@ -229,15 +242,24 @@ pressure_interp <- function(pressure_data, interp_to) {
   }
 
   # interpolate array
-  array_dim <- dim(pressure_data[[1]])
   pressure_array <- pressure_data[[1]]
-  for (i in 1:array_dim[1]) {
-    for (j in 1:array_dim[2]) {
-      interp_array[i, j, ] <- approxP(pressure_data[i, j, ], interp_to)
+  for (i in 1:dims[1]) {
+    for (j in 1:dims[2]) {
+      interp_array[i, j, ] <- approxP(pressure_array[i, j, ], interp_to)
     }
   }
 
-  # return interpolated array
+  # timing
+  time_seq <- seq(0, by = pressure_data[[3]], length.out = dims[3])
+  time_seq_int <- approxP(time_seq, interp_to)
+  time_sample_int <- time_seq_int[2] - time_seq_int[1]
+
+  # prep output
+  pressure_data_int <- list(pressure_array = interp_array,
+                            sens_size = pressure_data[[2]],
+                            time = time_sample_int)
+
+  # return interpolated pressure data
   return(interp_array)
 }
 
@@ -477,7 +499,8 @@ cop <- function(pressure_data) {
 #' @example
 #' footprint(pressure_data, plot = TRUE)
 
-footprint <- function(pressure_data, variable = "max", frame, plot = FALSE) {
+footprint <- function(pressure_data, variable = "max", frame,
+                      plot = FALSE) {
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -521,7 +544,7 @@ footprint <- function(pressure_data, variable = "max", frame, plot = FALSE) {
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @return ggplot plot object
 #' @examples
-#' plot_pressure(pressure_data, variable = "max")
+#' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           plot_COP = FALSE, plot_outline = FALSE,
