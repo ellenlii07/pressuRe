@@ -15,8 +15,8 @@ library(tidyverse)
 #library(rgl)
 #library(sp)
 #library(spatstat)
-#library(rgeos)
-#library(zoo)
+library(rgeos)
+library(zoo)
 #library(ggmap)
 #library(scales)
 #library(grid)
@@ -1039,6 +1039,95 @@ sensor_coords <- function(pressure_data) {
 
   # return sensor coordinates
   return(coords)
+}
+
+
+# =============================================================================
+
+#' Detects which foot plantar pressure data is from (left or right). Not 100%
+#' reliable...
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data. List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time
+#' @return String. "LEFT" or "RIGHT"
+#' @examples
+#' auto_detect_side(pressure_data)
+
+auto_detect_side <- function(pressure_data) {
+  # max pressure footprint
+  fp <- footprint(pressure_data)
+  fp_coords <- sensor_coords(pressure_data)
+  P <- c(max_df)
+  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord,
+                          P = P)
+  sc_df <- sc_df[which(P >= 5), ]
+  sc_df$P <- NULL
+  sc_df <- as.matrix(sc_df)
+
+  # Bounding box
+  mbb <- getMinBBox(sc_df)
+
+  # Which sides of BBox are shortest?
+  side1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
+                   (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
+  side2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
+                   (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
+  side3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
+                   (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
+  side4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
+                   (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
+  shortsides <- order(c(side1d, side2d, side3d, side4d))
+  shortsides <- shortsides[1:2]
+
+  # Make two long boxes
+  half1 <- c()
+  half2 <- c()
+  if (is.element(1, shortsides) == TRUE &
+      is.element(3, shortsides) == TRUE) {
+    mp1 <- c((mbb$pts[2,1] + mbb$pts[1,1]) / 2,
+             (mbb$pts[2,2] + mbb$pts[1,2]) / 2)
+    mp2 <- c((mbb$pts[4,1] + mbb$pts[3,1]) / 2,
+             (mbb$pts[4,2] + mbb$pts[3,2]) / 2)
+    half1 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
+               mbb$pts[2,1], mbb$pts[2,2], mbb$pts[3,1], mbb$pts[3,2])
+    half2 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
+               mbb$pts[4,1], mbb$pts[4,2], mbb$pts[1,1], mbb$pts[1,2])
+  } else if (is.element(2, shortsides) == TRUE &
+             is.element(4, shortsides) == TRUE) {
+    mp1 <- c((mbb$pts[3,1] + mbb$pts[2,1]) / 2,
+             (mbb$pts[3,2] + mbb$pts[2,2]) / 2)
+    mp2 <- c((mbb$pts[1,1] + mbb$pts[4,1]) / 2,
+             (mbb$pts[1,2] + mbb$pts[4,2]) / 2)
+    half1 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
+               mbb$pts[1,1], mbb$pts[1,2], mbb$pts[2,1], mbb$pts[2,2])
+    half2 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
+               mbb$pts[3,1], mbb$pts[3,2], mbb$pts[4,1], mbb$pts[4,2])
+  }
+
+  # find convex hull
+  chull_elements <- chull(x = sc_df$x, y = sc_df$y)
+  chull_polygon <- vector_to_polygon(as.vector(t(em_act[chull_elements, ])))
+  chull_df <- em_act[c(chull_elements, chull_elements[1]), ]
+
+  # Get intersecting area for each half
+  half1_p <- vector_to_polygon(half1)
+  half2_p <- vector_to_polygon(half2)
+  int_area_1 <- gArea(gIntersection(readWKT(chull_polygon),
+                                    readWKT(half1_p)))
+  int_area_2 <- gArea(gIntersection(readWKT(chull_polygon),
+                                    readWKT(half2_p)))
+
+  # figure out which side each half is and therefore foot
+  half1_x <- sum(half1[c(1, 3, 5, 7)])
+  half2_x <- sum(half2[c(1, 3, 5, 7)])
+
+  if (int_area_1 > int_area_2 & half1_x < half2_x) {side = "RIGHT"}
+  if (int_area_1 > int_area_2 & half1_x > half2_x) {side = "LEFT"}
+  if (int_area_2 > int_area_1 & half2_x < half1_x) {side = "RIGHT"}
+  if (int_area_2 > int_area_1 & half2_x > half1_x) {side = "LEFT"}
+
+  # Return side
+  return(side)
 }
 
 
