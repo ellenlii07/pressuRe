@@ -35,7 +35,7 @@ library(zoo)
 #' \itemize{
 #'   \item pressure_array. A 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item sens_size. Numeric vector with two values for the dimensions of the sensors
+#'   \item sens_size. Numeric vector with dimensions of the sensors (m)
 #'   \item time. Numeric value for time between measurements
 #'  }
 #' @examples
@@ -132,6 +132,103 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 
   # return emed data
   return(list(pressure_array = pressure_array, sens_size = sens_size, time = time))
+}
+
+load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
+  # Read unformatted emed data
+  pressure_raw <- readLines(file_path, warn = FALSE)
+
+  # get sensor size
+  sens_size_ln <- which(grepl("Sensor size", pressure_raw))[1]
+  sens_size <- str_extract_all(pressure_raw[sens_size_ln], "\\d+\\.\\d+")
+  sens_size <- as.numeric(unlist(sens_size))
+  if (str_detect(pressure_raw[sens_size_ln], "cm") == TRUE) {
+    sens_size <- sens_size * 0.01
+  }
+
+  # get capture frequency
+  time_line <- which(grepl("Time", pressure_raw))[1]
+  time_ln <- str_split(pressure_raw[time_line], "picture:")[[1]][2]
+  time <- as.numeric(unlist(str_extract_all(time_ln, "\\d+\\.\\d+")))
+  if (str_detect(time_ln, "ms") == TRUE) {time <- time / 1000}
+
+  # determine position breaks
+  breaks <- grep("Page", pressure_raw)
+
+  # identify and remove any summary frames
+  frame_type <- pressure_raw[breaks + 8]
+  MVP <- which(grepl("MVP", frame_type, fixed = TRUE))
+  MPP <- which(grepl("MPP", frame_type, fixed = TRUE))
+  breaks <- breaks[1:(min(c(MVP, MPP)) - 1)]
+
+  # get blank lines
+  ends <- which(pressure_raw == "\x0C")
+
+  # how many frames in each measurement
+  nfs <- sum(str_detect(pressure_raw[breaks + 8], "Pict-No\\.: 1 "))
+
+  # how many measurements
+  n_meas <- floor(length(breaks)/nfs)
+
+  # empty array
+  pressure_array <- array(0, dim = c(95, 64, n_meas))
+  for (i in 1:n_meas) {
+    for (j in 1:nfs) {
+      # start line
+      str <- (nfs * i) - 6 + j
+
+      # load as table
+      y <- pressure_raw[(breaks[str] + 10):(ends[which(ends > breaks[str])[1]] - 2)]
+      num_col <- unlist(str_split(y[1], "\\s+"))
+      wids <- rep(8, times = length(num_col))
+      z <- read.fwf(textConnection(y), widths = wids)
+      colnames(z) <- unname(z[1, ])
+      z <- z[2:nrow(z), ]
+
+      # remove zeros
+      z[is.na(z)] <- 0
+
+      # remove force column
+      if (colnames(z)[ncol(z)] == "Force") {z <- z[, 1:(ncol(z) - 1)]}
+
+      # remove force row
+      if (z[nrow(z), 1] == "Force") {z <- z[1:(nrow(z) - 1),]}
+
+      # column numbers
+      cn <- as.numeric(colnames(z)[2:length(z)])
+
+      # row numbers
+      rn <- unname(unlist((z[, 1])))
+      z <- as.matrix(z[, 2:ncol(z)])
+
+
+      # add to array
+      pressure_array[rn, cn, i] <- z
+    }
+  }
+
+  # if required, remove zero columns and rows
+  if (rem_zeros == TRUE) {
+    # make max footprint
+    fp <- apply(simplify2array(pressure_array), 1:2, max)
+
+    # rows
+    rsums <- rowSums(fp)
+    minr <- min(which(rsums > 0))
+    maxr <- max(which(rsums > 0))
+
+    # columns
+    csums <- colSums(fp)
+    minc <- min(which(csums > 0))
+    maxc <- max(which(csums > 0))
+
+    # update pressure array
+    pressure_array <- pressure_array[minr:maxr, minc:maxc,]
+  }
+
+  # return emed data
+  return(list(pressure_array = pressure_array, sens_size = sens_size,
+              time = time))
 }
 
 
@@ -519,8 +616,11 @@ footprint <- function(pressure_data, variable = "max", frame,
     mat <- pressure_frames[[1]][,, frame]
   }
 
+  pd <- pressure_data
+  pd[[1]] <- mat
+
   # plot if requested
-  if (plot == TRUE) {g <- plot_pressure(mat)}
+  if (plot == TRUE) {g <- plot_pressure(pd)}
 
   # return footprint
   return(mat)
@@ -581,7 +681,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   sens_coords <- sensor_coords(pressure_data)
 
   # overall dimensions of array
-  dims <- dim(pressure_array)
+  dims <- dim(pressure_data[[1]])
 
   # combine with pressure values
   cor <- cbind(sens_coords, as.vector(fp))
