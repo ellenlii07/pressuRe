@@ -234,6 +234,7 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
 
 # =============================================================================
 
+
 load_pedar <- function(pressure_filepath) {
 
 }
@@ -581,6 +582,36 @@ cop <- function(pressure_data) {
 
 # =============================================================================
 
+#' Coordinates of active sensors
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @return Data frame. x and y coordinates of sensors
+#' @examples
+#' sensor_coords(pressure_data)
+
+sensor_coords <- function(pressure_data) {
+  # max pressure footprint
+  max_fp <- footprint(pressure_data)
+
+  # dimensions
+  sens_x <- pressure_data[[2]][1]
+  sens_y <- pressure_data[[2]][2]
+
+  # data frame with active sensors as coordinates
+  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
+  x_cor <- rep(x_cor, each = nrow(max_fp))
+  y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
+               by = (-1 * sens_y), length.out = nrow(max_fp))
+  y_cor <- rep(y_cor, times = ncol(max_fp))
+  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
+
+  # return sensor coordinates
+  return(coords)
+}
+
+
+
 # =============================================================================
 
 #' Find footprint of pressure file
@@ -744,9 +775,32 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 # =============================================================================
 
+#' Determine outline (convex hull) of footprint
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @return Data frame. x and y coordinators of convex hull outline
+
+footprint_outline <- function(pressure_data) {
+  # determine active sensor coordinates
+  sens_coords <- sensor_coords(pressure_data)
+
+  # calculate convex hull
+  con_hull <- chull(sens_coords[, 2:3])
+  con_hull <- sens_coords[con_hull, 2:3]
+  con_hull <- rbind(con_hull, con_hull[1, ])
+  rownames(con_hull) <- c()
+
+  # return convex hull coordinates
+  return(con_hull)
+}
+
+
+# =============================================================================
+
 #' Produce animation of pressure footprint
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
+#' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param sens_x Numeric. Dimension of sensor in x direction, equivalent to
 #'   column width in pressure matrix
@@ -761,6 +815,10 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @return A series of image files that can be combined into an avi file or
 #'   similar. For example, ImageJ can be used to create the video
 
+animate footprint <- function(pressure_data) {
+
+}
+
 animate_footprint <- function(pressure_frames, sens_x = 0.005,
                               sens_y = 0.005, exp_name, path, type, res, width,
                               height) {
@@ -773,8 +831,7 @@ animate_footprint <- function(pressure_frames, sens_x = 0.005,
   }
 }
 
-animate_footprintx <- function(pressure_frames, sens_x = 0.005,
-                              sens_y = 0.005) {
+animate_footprint <- function(pressure_data) {
   ## helper function
   # generate dataframe with coords for each frame
   press_df <- function(pressure_matrix) {
@@ -1100,68 +1157,6 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 
   # return CPEI
   return(CPEI)
-}
-
-
-# =============================================================================
-
-#' Determine outline (convex hull) of footprint
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
-#' @param sens_x Numeric. Dimension of sensor in x direction, equivalent to
-#'   column width in pressure matrix
-#' @param sens_y Numeric. Dimension of sensor in y direction, equivalent to row
-#'   height in pressure matrix
-#' @return Data frame. x and y cordinates of convex hull outline
-
-footprint_outline <- function(pressure_frames, sens_x = 0.005,
-                              sens_y = 0.005) {
-  # determine active sensor coordinates
-  sens_coords <- sensor_coords(pressure_frames, sens_x, sens_y)
-
-  # calculate convex hull
-  con_hull <- chull(sens_coords[, 2:3])
-  con_hull <- sens_coords[con_hull, 2:3]
-  con_hull <- rbind(con_hull, con_hull[1, ])
-  rownames(con_hull) <- c()
-
-  # return convex hull coordinates
-  return(con_hull)
-}
-
-
-# =============================================================================
-
-#' Coordinates of active sensors
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. Includes a 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
-#' @return Data frame. x and y coordinates of sensors
-#' @examples
-#' sensor_coords(pressure_data)
-
-sensor_coords <- function(pressure_data) {
-  # max pressure footprint
-  max_fp <- footprint(pressure_data)
-
-  # dimensions
-  sens_x <- pressure_data[[2]][1]
-  sens_y <- pressure_data[[2]][2]
-
-  # data frame with active sensors as coordinates
-  #P <- c(max_fp)
-  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
-  x_cor <- rep(x_cor, each = nrow(max_fp))
-  y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
-               by = (-1 * sens_y), length.out = nrow(max_fp))
-  y_cor <- rep(y_cor, times = ncol(max_fp))
-  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)#, P = P)
-  #coords <- coords[which(P >= 5), ]
-  #coords <- coords[, 1:3]
-
-  # return sensor coordinates
-  return(coords)
 }
 
 
