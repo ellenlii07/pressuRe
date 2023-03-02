@@ -364,6 +364,96 @@ pressure_interp <- function(pressure_data, interp_to) {
 
 # =============================================================================
 
+#' Detects which foot plantar pressure data is from (left or right). Not 100%
+#' reliable...
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data. List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time
+#' @return String. "LEFT" or "RIGHT"
+#' @examples
+#' auto_detect_side(pressure_data)
+
+auto_detect_side <- function(pressure_data) {
+  # max pressure footprint
+  fp <- footprint(pressure_data)
+  fp_coords <- sensor_coords(pressure_data)
+  P <- c(max_df)
+  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord,
+                      P = P)
+  sc_df <- sc_df[which(P >= 5), ]
+  sc_df$P <- NULL
+  sc_df <- as.matrix(sc_df)
+
+  # Bounding box
+  mbb <- getMinBBox(sc_df)
+
+  # Which sides of BBox are shortest?
+  side1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
+                   (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
+  side2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
+                   (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
+  side3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
+                   (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
+  side4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
+                   (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
+  shortsides <- order(c(side1d, side2d, side3d, side4d))
+  shortsides <- shortsides[1:2]
+
+  # Make two long boxes
+  half1 <- c()
+  half2 <- c()
+  if (is.element(1, shortsides) == TRUE &
+      is.element(3, shortsides) == TRUE) {
+    mp1 <- c((mbb$pts[2,1] + mbb$pts[1,1]) / 2,
+             (mbb$pts[2,2] + mbb$pts[1,2]) / 2)
+    mp2 <- c((mbb$pts[4,1] + mbb$pts[3,1]) / 2,
+             (mbb$pts[4,2] + mbb$pts[3,2]) / 2)
+    half1 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
+               mbb$pts[2,1], mbb$pts[2,2], mbb$pts[3,1], mbb$pts[3,2])
+    half2 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
+               mbb$pts[4,1], mbb$pts[4,2], mbb$pts[1,1], mbb$pts[1,2])
+  } else if (is.element(2, shortsides) == TRUE &
+             is.element(4, shortsides) == TRUE) {
+    mp1 <- c((mbb$pts[3,1] + mbb$pts[2,1]) / 2,
+             (mbb$pts[3,2] + mbb$pts[2,2]) / 2)
+    mp2 <- c((mbb$pts[1,1] + mbb$pts[4,1]) / 2,
+             (mbb$pts[1,2] + mbb$pts[4,2]) / 2)
+    half1 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
+               mbb$pts[1,1], mbb$pts[1,2], mbb$pts[2,1], mbb$pts[2,2])
+    half2 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
+               mbb$pts[3,1], mbb$pts[3,2], mbb$pts[4,1], mbb$pts[4,2])
+  }
+
+  # find convex hull
+  chull_elements <- chull(x = sc_df$x, y = sc_df$y)
+  chull_polygon <- vector_to_polygon(as.vector(t(em_act[chull_elements, ])))
+  chull_df <- em_act[c(chull_elements, chull_elements[1]), ]
+
+  # Get intersecting area for each half
+  half1_p <- vector_to_polygon(half1)
+  half2_p <- vector_to_polygon(half2)
+  int_area_1 <- gArea(gIntersection(readWKT(chull_polygon),
+                                    readWKT(half1_p)))
+  int_area_2 <- gArea(gIntersection(readWKT(chull_polygon),
+                                    readWKT(half2_p)))
+
+  # figure out which side each half is and therefore foot
+  half1_x <- sum(half1[c(1, 3, 5, 7)])
+  half2_x <- sum(half2[c(1, 3, 5, 7)])
+
+  if (int_area_1 > int_area_2 & half1_x < half2_x) {side = "RIGHT"}
+  if (int_area_1 > int_area_2 & half1_x > half2_x) {side = "LEFT"}
+  if (int_area_2 > int_area_1 & half2_x < half1_x) {side = "RIGHT"}
+  if (int_area_2 > int_area_1 & half2_x > half1_x) {side = "LEFT"}
+
+  # Return side
+  return(side)
+}
+
+
+
+# =============================================================================
+
 #' Generate force curve with option to plot
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. A 3D array covering each timepoint of the
@@ -1159,90 +1249,156 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 
 # =============================================================================
 
-#' Detects which foot plantar pressure data is from (left or right). Not 100%
-#' reliable...
+#' Analyze masked regions of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data. List. First item should be a 3D array covering each
-#' timepoint of the measurement. z dimension represents time
-#' @return String. "LEFT" or "RIGHT"
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @param masks. List. Masks used to define the regions to be analysed
+#' @param partial_sensors Logical Defines how sensors that do not
+#'   lie wholly within mask are dealt with. If FALSE, they will be excluded;
+#'   if TRUE, for relevant variables their contribution will be weighted by the
+#'   proportion of the sensor that falls within the mask border
+#' @param variable String. Variable to be determined. "peak_sensor",
+#'  "peak_sensor_ts", "peak_mask", "peak_mask_ts", "mean_mask",
+#'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2", force_peak",
+#'  "force_ts"
+#' @return
 #' @examples
-#' auto_detect_side(pressure_data)
+#'
 
-auto_detect_side <- function(pressure_data) {
-  # max pressure footprint
-  fp <- footprint(pressure_data)
-  fp_coords <- sensor_coords(pressure_data)
-  P <- c(max_df)
-  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord,
-                          P = P)
-  sc_df <- sc_df[which(P >= 5), ]
-  sc_df$P <- NULL
-  sc_df <- as.matrix(sc_df)
+mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
+                          variable = "peak_sensor") {
+  # Helper functions
+  vector_to_polygon <- function(x) {
+    xa <- c()
+    for (i in 1:((length(x)) / 2)) {
+      xa <- paste0(xa, x[(2*i) - 1], " ", x[2 * i], ", ")
+    }
 
-  # Bounding box
-  mbb <- getMinBBox(sc_df)
-
-  # Which sides of BBox are shortest?
-  side1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
-                   (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
-  side2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
-                   (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
-  side3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
-                   (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
-  side4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
-                   (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
-  shortsides <- order(c(side1d, side2d, side3d, side4d))
-  shortsides <- shortsides[1:2]
-
-  # Make two long boxes
-  half1 <- c()
-  half2 <- c()
-  if (is.element(1, shortsides) == TRUE &
-      is.element(3, shortsides) == TRUE) {
-    mp1 <- c((mbb$pts[2,1] + mbb$pts[1,1]) / 2,
-             (mbb$pts[2,2] + mbb$pts[1,2]) / 2)
-    mp2 <- c((mbb$pts[4,1] + mbb$pts[3,1]) / 2,
-             (mbb$pts[4,2] + mbb$pts[3,2]) / 2)
-    half1 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
-               mbb$pts[2,1], mbb$pts[2,2], mbb$pts[3,1], mbb$pts[3,2])
-    half2 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
-               mbb$pts[4,1], mbb$pts[4,2], mbb$pts[1,1], mbb$pts[1,2])
-  } else if (is.element(2, shortsides) == TRUE &
-             is.element(4, shortsides) == TRUE) {
-    mp1 <- c((mbb$pts[3,1] + mbb$pts[2,1]) / 2,
-             (mbb$pts[3,2] + mbb$pts[2,2]) / 2)
-    mp2 <- c((mbb$pts[1,1] + mbb$pts[4,1]) / 2,
-             (mbb$pts[1,2] + mbb$pts[4,2]) / 2)
-    half1 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
-               mbb$pts[1,1], mbb$pts[1,2], mbb$pts[2,1], mbb$pts[2,2])
-    half2 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
-               mbb$pts[3,1], mbb$pts[3,2], mbb$pts[4,1], mbb$pts[4,2])
+    xb <- readWKT(paste0("POLYGON ((", xa, x[1], " ", x[2], "))"))
+    return(xb)
+  } #Turns coords into polygon
+  sensor_to_polygon <- function(act_sens, row_no, max_df_rows, max_df_cols) {
+    sensor_x_coord <- (act_sens[row_no, 2] * 0.005) - 0.0025
+    sensor_y_coord <- ((max_df_rows * 0.005) - 0.0025) -
+      act_sens[row_no,1] * 0.005
+    x1 <- sensor_x_coord - 0.0025
+    y1 <- sensor_y_coord + 0.0025
+    x2 <- sensor_x_coord + 0.0025
+    y2 <- sensor_y_coord + 0.0025
+    x3 <- sensor_x_coord + 0.0025
+    y3 <- sensor_y_coord - 0.0025
+    x4 <- sensor_x_coord - 0.0025
+    y4 <- sensor_y_coord - 0.0025
+    xy <- c(x1, y1, x2, y2, x3, y3, x4, y4)
+    sens_polygon <- vector_to_polygon(xy)
+    return(sens_polygon)
   }
 
-  # find convex hull
-  chull_elements <- chull(x = sc_df$x, y = sc_df$y)
-  chull_polygon <- vector_to_polygon(as.vector(t(em_act[chull_elements, ])))
-  chull_df <- em_act[c(chull_elements, chull_elements[1]), ]
+  ## Organise sensors into region groups
+  # Find max footprint
+  max_df <- apply(simplify2array(x), 1:2, max)
+  max_df_rows <- nrow(max_df)
+  max_df_cols <- ncol(max_df)
 
-  # Get intersecting area for each half
-  half1_p <- vector_to_polygon(half1)
-  half2_p <- vector_to_polygon(half2)
-  int_area_1 <- gArea(gIntersection(readWKT(chull_polygon),
-                                    readWKT(half1_p)))
-  int_area_2 <- gArea(gIntersection(readWKT(chull_polygon),
-                                    readWKT(half2_p)))
+  # Find which sensors are non zero
+  act_sens <- which(max_df > 0, arr.ind = TRUE)
 
-  # figure out which side each half is and therefore foot
-  half1_x <- sum(half1[c(1, 3, 5, 7)])
-  half2_x <- sum(half2[c(1, 3, 5, 7)])
+  # make active sensors into a list of polygons
+  act_sens_poly <- list()
+  for (i in 1:nrow(act_sens)) {
+    act_sens_poly[[i]] <- sensor_to_polygon(act_sens, i, max_df_rows,
+                                            max_df_cols)
+  }
 
-  if (int_area_1 > int_area_2 & half1_x < half2_x) {side = "RIGHT"}
-  if (int_area_1 > int_area_2 & half1_x > half2_x) {side = "LEFT"}
-  if (int_area_2 > int_area_1 & half2_x < half1_x) {side = "RIGHT"}
-  if (int_area_2 > int_area_1 & half2_x > half1_x) {side = "LEFT"}
+  # For each region mask, find which polygons intersect
+  overlap_list <- vector("list", length(masks))
+  for (i in 1:length(masks)){
+    for (j in 1:length(act_sens_poly)) {
+      x <- gIntersects(masks[[i]], act_sens_poly[[j]])
+      if (x == TRUE) {
+        overlap_list[[i]] <- append(overlap_list[[i]], j)
+      }
+    }
+  }
 
-  # Return side
-  return(side)
+
+
+  # Apply weightings with adjustments if partial sensors are to be included
+  #Measure overlapping area
+  #Overlap_areas <- vector("list", length(masks))
+  #for (i in 1:length(Overlap_list)) {
+  #  for (j in 1:length(Overlap_list[[i]])) {
+  #    x <- Intersect_area(act_sens_poly[Overlap_list[[i]][j]],masks[[i]])
+  #    x <- gArea(x)
+  #    x <- x/(pedarpoly_area[Overlap_list[[i]][j]])
+  #    x <- x*pedarSensorAreas[Overlap_list[[i]][j]]
+  #    Overlap_areas[[i]] <- append(Overlap_areas[[i]], x)
+  #  }
+  #}
+
+
+  # Analyse regions for maximum value of any sensor within region during trial
+  if (press_peak_sensor == TRUE) {
+    peak_sens <- rep(NA, times = length(masks))
+    for (i in 1:length(overlap_list)) {
+      peak_sens[i] <- max(max_df[act_sens[overlap_list[[i]],]])
+    }
+  }
+
+  # Analyse regions for maximum value of any sensor within region throughout
+  # trial. Outputs 101 point vector
+  if(press_peak_sensor_ts == TRUE) {
+
+  }
+
+  # Analyse regions for peak regional pressure (defined as the maximum mean
+  # pressure of active sensors in region during the trial)
+  if(press_peak_region == TRUE) {
+
+  }
+
+  # Analyse regions for peak regional pressure (defined as the maximum mean
+  # pressure of active sensors in region during the trial). Outputs 101 point vector
+  if(press_peak_region_ts == TRUE) {
+
+  }
+
+  # Analyse regions for overall mean pressure during the trial
+  if(press_mean_region == TRUE) {
+
+  }
+
+  # Analyse regions for maximum contact area of region during trial
+  if(contact_area_peak == TRUE) {
+
+  }
+
+  # Analyse regions for contact area throughout the trial (outputs vector)
+  if(contact_area_ts == TRUE) {
+
+  }
+
+  # Analyse regions for pressure time integral (Novel definition)
+  if(press_ti_1 == TRUE) {
+
+  }
+
+  # Analyse regions for pressure time integral (Melai definition)
+  if(press_ti_2 == TRUE) {
+
+  }
+
+  # Analyse regions for maximum force during the trial
+  if(force_peak == TRUE) {
+
+  }
+
+  # Analyse regions for force throughout the trial (outputs vector)
+  if(force_ts == TRUE) {
+
+  }
+  return(peak_sens)
 }
 
 
@@ -1325,10 +1481,4 @@ gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
 
 
 # =============================================================================
-
-#file_path <- "C:/Users/telfe/Dropbox/My_Projects/Twinfoot/data/TWINFOOT001A/right/798.lst"
-#file_path <- "C:/Users/telfe/Dropbox/My_Projects/Twinfoot/data/TWINFOOT001A/static.lst"
-#pressure_frames <- load_emed(file_path, flip = TRUE)
-#plot_footprint(pressure_frames, plot_COP = TRUE, plot_outline = TRUE)
-#
 
