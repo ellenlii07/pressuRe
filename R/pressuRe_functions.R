@@ -586,11 +586,12 @@ cop <- function(pressure_data) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
+#' @param active. Logical. Should the coordinates be limited to active sensors
 #' @return Data frame. x and y coordinates of sensors
 #' @examples
 #' sensor_coords(pressure_data)
 
-sensor_coords <- function(pressure_data) {
+sensor_coords <- function(pressure_data, active = FALSE) {
   # max pressure footprint
   max_fp <- footprint(pressure_data)
 
@@ -605,6 +606,12 @@ sensor_coords <- function(pressure_data) {
                by = (-1 * sens_y), length.out = nrow(max_fp))
   y_cor <- rep(y_cor, times = ncol(max_fp))
   coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
+
+  # remove inactive sensors if required
+  if (active == TRUE) {
+    P <- c(max_fp)
+    coords <- coords[which(P > 0), ]
+  }
 
   # return sensor coordinates
   return(coords)
@@ -755,7 +762,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # add outline
   if (plot_outline == TRUE) {
-    ch_out <- footprint_outline(pressure_data)
+    ch_out <- pressure_outline(pressure_data)
     g <- g + geom_path(data = ch_out, aes(x = x_coord, y = y_coord),
                        colour = "black")
     g <- g + geom_point(data = ch_out, aes(x = x_coord, y = y_coord),
@@ -783,16 +790,15 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 pressure_outline <- function(pressure_data) {
   # determine active sensor coordinates
-  sens_coords <- sensor_coords(pressure_data)
+  sens_coords <- sensor_coords(pressure_data, active = TRUE)
 
   # calculate convex hull
-  con_hull <- chull(sens_coords[, 2:3])
-  con_hull <- sens_coords[con_hull, 2:3]
-  con_hull <- rbind(con_hull, con_hull[1, ])
-  rownames(con_hull) <- c()
+  outline_sens <- chull(sens_coords)
+  outline_sens_coords <- sens_coords[outline_sens, ]
+  outline_sens_coords <- rbind(outline_sens_coords, outline_sens_coords[1, ])
 
   # return convex hull coordinates
-  return(con_hull)
+  return(outline_sens_coords)
 }
 
 
