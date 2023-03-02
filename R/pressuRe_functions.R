@@ -651,7 +651,7 @@ footprint <- function(pressure_data, variable = "max", frame,
     mat <- apply(simplify2array(pressure_data[[1]]), 1:2, mean)
   }
   if (variable == "frame") {
-    mat <- pressure_frames[[1]][,, frame]
+    mat <- pressure_data[[1]][,, frame]
   }
 
   pd <- pressure_data
@@ -804,53 +804,37 @@ pressure_outline <- function(pressure_data) {
 
 # =============================================================================
 
-#' Produce animation of pressure footprint
+#' Produce animation (gif) of pressure distribution
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param sens_x Numeric. Dimension of sensor in x direction, equivalent to
-#'   column width in pressure matrix
-#' @param sens_y Numeric. Dimension of sensor in y direction, equivalent to row
-#'   height in pressure matrix
-#' @param exp_name Name of export file(s)
-#' @param path Location animation files are to be saved
-#' @param type The file type for the animation. Currently only "png" supported.
-#' @param res Resolution of images in dpi
-#' @param width Width of animation
-#' @param height Height of animation
-#' @return A series of image files that can be combined into an avi file or
-#'   similar. For example, ImageJ can be used to create the video
+#' @param fps Numeric. Number of frames per second in animation
+#' @param file Name (inlcuding path) of export file
+#' @param preview Logical. Whether to play the animation
+#' @return Animation in gif format
+#' @examples
+#' animate_pressure(pressure_data, fps = 10, "testgif.gif")
 
-animate footprint <- function(pressure_data) {
+animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
+  # parameter check
+  if (str_ends(filename, ".gif") == FALSE)
+    stop("filename must end in .gif")
 
-}
+  # colours
+  plot_cs <- list(cs_breaks = c(0, 15, 40, 60, 100, 150, 220, 300, 5000),
+                  cs_cols = c("white", "grey", "blue", "light blue",
+                                     "green", "yellow", "red", "deeppink"))
+                                     cols <- unlist(plot_cs[[2]])
 
-animate_footprint <- function(pressure_frames, sens_x = 0.005,
-                              sens_y = 0.005, exp_name, path, type, res, width,
-                              height) {
-  for (i in 1:(dim(pressure_frames)[3])) {
-    filename = paste0(path, "/", exp_name, i, ".png")
-    g = plot_footprint(pressure_frames, value = "frame", frame = i,
-                       sens_x = sens_x, sens_y = sens_y)
-      ggsave(filename, g, dpi = res, width = width, height = height,
-             bg = "transparent")
-  }
-}
-
-animate_footprint <- function(pressure_data) {
-  ## helper function
-  # generate dataframe with coords for each frame
-  press_df <- function(pressure_matrix) {
+  # generate dataframe with coords for each frame (helper function)
+  press_df <- function(pressure_data, frame) {
     # generate coordinates for each sensor
-    dims <- dim(pressure_matrix)
-    x_cor <- seq(from = (sens_x / 2), by = sens_x, length.out = dims[2])
-    x_cor <- rep(x_cor, each = dims[1])
-    y_cor <- seq(from = (sens_y / 2) + ((dims[1] - 1) * sens_y),
-                 by = sens_y * -1, length.out = dims[1])
-    y_cor <- rep(y_cor, times = dims[2])
+    sens_coords <- sensor_coords(pressure_data)
 
     # combine with pressure values
-    cor <- cbind(x_cor, y_cor, as.vector(pressure_matrix))
+    dims <- dim(pressure_data[[1]])
+    P <- c(footprint(pressure_data, "frame", frame))
+    cor <- cbind(sens_coords, P)
     cor <- as.data.frame(cor)
     colnames(cor) <- c("x", "y", "value")
 
@@ -871,38 +855,45 @@ animate_footprint <- function(pressure_data) {
 
     # combine with data frame
     cor <- cbind(cor, colour)
-  }
 
-  # generate big df with frame number added
-  df <- data.frame(x = as.numeric(character()),
-                   y = as.numeric(character()),
-                   value = as.numeric(character()),
-                   colour = as.numeric(character()))
-  for (i in 1:(dim(pressure_frames)[3])) {
-    x <- press_df(pressure_frames[, , i])
-    frame <- rep(i, times = nrow(x))
-    x <- cbind(x, frame)
-    df <- rbind(df, x)
+    # return
+    return(cor)
   }
 
   # plot
-  ## plot
-  g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour), frame = frame))
-  g <- g + geom_raster()
-  g <- g + scale_fill_manual(values = cols)
-  g <- g + scale_x_continuous(expand = c(0, 0))
-  g <- g + scale_y_continuous(expand = c(0, 0))
-  g <- g + coord_fixed()
-  g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
-                 axis.text.y = element_blank(), axis.ticks = element_blank(),
-                 axis.title.x = element_blank(),
-                 axis.title.y = element_blank(),
-                 panel.background = element_blank(),
-                 panel.border = element_blank(),
-                 panel.grid.major = element_blank(),
-                 panel.grid.minor = element_blank(),
-                 legend.position = "none")
-  gg_animate(g)
+  img <- image_graph(600, 340, res = 96)
+  for (i in 1:dim(pressure_data[[1]])[3]) {
+    df <- press_df(pressure_data, i)
+    g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour)))
+    g <- g + geom_raster()
+    g <- g + scale_fill_manual(values = cols)
+    g <- g + scale_x_continuous(expand = c(0, 0))
+    g <- g + scale_y_continuous(expand = c(0, 0))
+    g <- g + coord_fixed()
+    g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
+                   axis.text.y = element_blank(), axis.ticks = element_blank(),
+                   axis.title.x = element_blank(),
+                   axis.title.y = element_blank(),
+                   panel.background = element_blank(),
+                   panel.border = element_blank(),
+                   panel.grid.major = element_blank(),
+                   panel.grid.minor = element_blank(),
+                   legend.position = "none")
+    print(g)
+  }
+
+  # turn off device and clean up data
+  dev.off()
+  gc()
+
+  # create animation
+  animation <- image_animate(img, fps = fps, optimize = TRUE)
+
+  # save animation
+  image_write(animation, filename)
+
+  # preview if required
+  if (preview == TRUE) {print(animation)}
 }
 
 
