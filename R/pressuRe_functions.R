@@ -775,13 +775,13 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 # =============================================================================
 
-#' Determine outline (convex hull) of footprint
+#' Determine outline (convex hull) of pressure measurement
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @return Data frame. x and y coordinators of convex hull outline
 
-footprint_outline <- function(pressure_data) {
+pressure_outline <- function(pressure_data) {
   # determine active sensor coordinates
   sens_coords <- sensor_coords(pressure_data)
 
