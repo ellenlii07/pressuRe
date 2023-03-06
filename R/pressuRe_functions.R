@@ -6,22 +6,19 @@
 # use sensor coordinate function in other plot functions
 # pedar import
 # fscan import
+# combine load emed functions (use row col numbers)
+# output variables...
 
 
 # =============================================================================
 
 # Packages required
 library(tidyverse)
-#library(ggplot2)
 #library(rgl)
-#library(sp)
-#library(spatstat)
+library(sf)
 library(rgeos)
 library(zoo)
-#library(ggmap)
 #library(scales)
-#library(grid)
-#library(gganimate)
 
 
 # =============================================================================
@@ -989,9 +986,688 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 
 # =============================================================================
 
+#' Automatically create mask of footprint
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement. z dimension represents time
+#' @param side Character. "RIGHT" or "LEFT"
+#' @param sens Numeric. Number of frames per second in animation
+#' @param plot Logical. Whether to play the animation
+#' @return List. Contains polygon with each mask
+#' @examples
+#' automask_emed(pressure_data, sens = 4, plot = TRUE)
+
+automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
+  # Helper functions
+  getMinBBox <- function(xy) {
+    stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
+
+    ## rotating calipers algorithm using the convex hull
+    H    <- chull(xy)                    # hull indices, vertices ordered clockwise
+    n    <- length(H)                    # number of hull vertices
+    hull <- xy[H, ]                      # hull vertices
+
+    ## unit basis vectors for all subspaces spanned by the hull edges
+    hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
+    hLens <- sqrt(rowSums(hDir^2))       # length of basis vectors
+    huDir <- diag(1/hLens) %*% hDir      # scaled to unit length
+
+    ## unit basis vectors for the orthogonal subspaces
+    ## rotation by 90 deg -> y' = x, x' = -y
+    ouDir <- cbind(-huDir[ , 2], huDir[ , 1])
+
+    ## project hull vertices on the subspaces spanned by the hull edges, and on
+    ## the subspaces spanned by their orthogonal complements - in subspace coords
+    projMat <- rbind(huDir, ouDir) %*% t(hull)
+
+    ## range of projections and corresponding width/height of bounding rectangle
+    rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
+    rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
+    widths  <- numeric(n)
+    heights <- numeric(n)
+    for(i in seq(along=H)) {
+      rangeH[i, ] <- range(projMat[  i, ])
+      rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
+      widths[i]   <- abs(diff(rangeH[i, ]))
+      heights[i]  <- abs(diff(rangeO[i, ]))
+    }
+
+    ## extreme projections for min-area rect in subspace coordinates
+    eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
+    hProj <- rbind(   rangeH[eMin, ], 0)
+    oProj <- rbind(0, rangeO[eMin, ])
+
+    ## move projections to rectangle corners
+    hPts <- sweep(hProj, 1, oProj[ , 1], "+")
+    oPts <- sweep(hProj, 1, oProj[ , 2], "+")
+
+    ## corners in standard coordinates, rows = x,y, columns = corners
+    ## in combined (4x2)-matrix: reverse point order to be usable in polygon()
+    basis <- cbind(huDir[eMin, ], ouDir[eMin, ])  # basis formed by hull edge and orth
+    hCorn <- basis %*% hPts
+    oCorn <- basis %*% oPts
+    pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
+
+    return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
+  } #Finds minimum bounding box
+  vector_to_polygon <- function(x) {
+    xa <- c()
+    for (i in 1:((length(x)) / 2)) {
+      xa <- paste0(xa, x[(2*i) - 1], " ", x[2 * i], ", ")
+    }
+
+    xb <- (paste0("POLYGON ((", xa, x[1], " ", x[2], "))"))
+    return(xb)
+  } #Turns coords into polygon
+  extend_line <- function(x, extend = 1) {
+    m1 = (x[4] - x[2]) / (x[3] - x[1])
+    c1 = x[2] - (m1 * x[1])
+    new_x1 = max(x[c(1,3)]) + extend
+    new_x2 = min(x[c(1,3)]) - extend
+    new_y1 = m1 * new_x1 + c1
+    new_y2 = m1 * new_x2 + c1
+    ext_line = c(new_x1, new_y1, new_x2, new_y2)
+  } #Adds 1 unit to end of line
+  line_int <- function(x, y) {
+    # correct for vertical vectors
+    if(x[3] == x[1]) {x[1] <- x[1] + 0.0001}
+    if(y[3] == y[1]) {y[1] <- y[1] + 0.0001}
+
+    # Find equation constants
+    m1 <- (x[4] - x[2]) / (x[3] - x[1])
+    m2 <- (y[4] - y[2]) / (y[3] - y[1])
+    c1 <- x[2] - (m1 * x[1])
+    c2 <- y[2] - (m2 * y[1])
+
+    myCoeffMat <- matrix(c(-m1, 1, -m2, 1), nrow = 2, ncol = 2, byrow = TRUE)
+    myRhsMat <- matrix(c(c1, c2), nrow = 2, ncol = 1, byrow = TRUE)
+    myInverse <- solve(myCoeffMat)
+    myResult <- myInverse %*% myRhsMat
+
+    # return
+    return(myResult)
+  } # Where two lines intercept
+
+
+  # ===========================================================================
+
+  # Find footprint (max)
+  max_df <- footprint(pressure_data)
+
+  # coordinates
+  sens_coords <- sensor_coords(pressure_data)
+
+  # make data frame
+  P <- c(max_df)
+  em_act_df <- data.frame(x = sens_coords$x_coord, y = sens_coords$y_coord,
+                          P = P)
+  em_act_df <- em_act_df[which(P >= 5), ]
+  em_act_df$P <- NULL
+
+
+  # ===========================================================================
+
+  # Define minimum bounding box
+  em_act_m <- as.matrix(em_act_df)
+  mbb <- getMinBBox(em_act_m)
+  mbb_df <- data.frame(x = mbb$pts[, 1], y = mbb$pts[, 2])
+
+  # Define convex hull, expanding to include all sensors
+  chull_elements <- chull(x = em_act_df$x, y = em_act_df$y)
+  chull_polygon <- vector_to_polygon(c(t(em_act_df[chull_elements, ])))
+  chull_ex <- gBuffer(readWKT(chull_polygon), width = 0.005,
+                      joinStyle = "MITRE")
+  chull_ex_df <- fortify(chull_ex)
+  chull_ex_df <- data.frame(x = chull_ex_df$long, y = chull_ex_df$lat)
+
+
+  # ===========================================================================
+
+  # Define angles for dividing lines between metatarsals
+  ## Find longest vectors (these are the med and lat edges of the footprint)
+  z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
+  vec_1 <- order(z_dist, decreasing = TRUE)[1]
+  vec_2 <- order(z_dist, decreasing = TRUE)[2]
+
+  ## Get coords for longest vector, reorder so lowest (y-axis) is first
+  vec_1 <- c(chull_ex_df[vec_1, 1], chull_ex_df[vec_1, 2],
+             chull_ex_df[vec_1 + 1, 1], chull_ex_df[vec_1 + 1, 2])
+  vec_2 <- c(chull_ex_df[vec_2, 1], chull_ex_df[vec_2,2],
+             chull_ex_df[vec_2 + 1, 1], chull_ex_df[vec_2 + 1, 2])
+  if (vec_1[2] > vec_1[4]) {vec_1 <- c(vec_1[3], vec_1[4], vec_1[1], vec_1[2])}
+  if (vec_2[2] > vec_2[4]) {vec_2 <- c(vec_2[3], vec_2[4], vec_2[1], vec_2[2])}
+
+  ## Define as lat or med
+  if (side == "RIGHT" & sum(vec_1[c(1,3)]) > sum(vec_2[c(1,3)])) {
+    lat_side = vec_1
+    med_side = vec_2
+  } else if (side == "RIGHT" & sum(vec_1[c(1,3)]) < sum(vec_2[c(1,3)])) {
+    lat_side = vec_2
+    med_side = vec_1
+  } else if (side == "LEFT" & sum(vec_1[c(1,3)]) > sum(vec_2[c(1,3)])) {
+    lat_side = vec_2
+    med_side = vec_1
+  } else if (side == "LEFT" & sum(vec_1[c(1,3)]) < sum(vec_2[c(1,3)])) {
+    lat_side = vec_1
+    med_side = vec_2
+  }
+
+  ## Find angle between vectors
+  lat_v_ang <- c(lat_side[3] - lat_side[1], lat_side[4] - lat_side[2])
+  med_v_ang <- c(med_side[3] - med_side[1], med_side[4] - med_side[2])
+  lat_v_alpha <- atan2(lat_v_ang[2], lat_v_ang[1]) * (180 / pi)
+  med_v_alpha <- atan2(med_v_ang[2], med_v_ang[1]) * (180 / pi)
+  alpha <- abs(lat_v_alpha - med_v_alpha)
+
+  # get angle vectors
+  if (side == "LEFT") {
+    MTH_hx_alpha = med_v_alpha + (0.33 * alpha)
+    MTH_12_alpha = med_v_alpha + (0.3  * alpha)
+    MTH_22_alpha = med_v_alpha + (0.38 * alpha)
+    MTH_23_alpha = med_v_alpha + (0.47 * alpha)
+    MTH_34_alpha = med_v_alpha + (0.64 * alpha)
+    MTH_45_alpha = med_v_alpha + (0.81 * alpha)
+  } else if (side == "RIGHT") {
+    MTH_hx_alpha = med_v_alpha - (0.33 * alpha)
+    MTH_12_alpha = med_v_alpha - (0.3 * alpha)
+    MTH_22_alpha = med_v_alpha - (0.38 * alpha)
+    MTH_23_alpha = med_v_alpha - (0.47 * alpha)
+    MTH_34_alpha = med_v_alpha - (0.64 * alpha)
+    MTH_45_alpha = med_v_alpha - (0.81 * alpha)
+  }
+
+
+  # ===========================================================================
+
+  # Define cutting masks for MTH areas
+  ## Find coord pairs for MTH and mid 2nd division lines
+  crossing_point <- line_int(vec_1, vec_2)
+  MT_lines <- c("MTH_hx_alpha", "MTH_12_alpha", "MTH_22_alpha", "MTH_23_alpha",
+                "MTH_34_alpha", "MTH_45_alpha")
+  MTH_hx_line <- c(NA, NA, NA, NA)
+  MTH_12_line <- c(NA, NA, NA, NA)
+  MTH_22_line <- c(NA, NA, NA, NA)
+  MTH_23_line <- c(NA, NA, NA, NA)
+  MTH_34_line <- c(NA, NA, NA, NA)
+  MTH_45_line <- c(NA, NA, NA, NA)
+
+  for (i in 1:6) {
+    MT_line_name = paste0(substr(MT_lines[i], 1, 7), "line")
+    if (get(MT_lines[i]) <= 90) {
+      x2 = cos(get(MT_lines[i]) * pi / 180) * 5 + crossing_point[1]
+      y2 = sin(get(MT_lines[i]) * pi / 180) * 5 + crossing_point[2]
+    } else if (get(MT_lines[i]) > 90) {
+      angle = get(MT_lines[i]) - 90
+      x2 = crossing_point[1] - sin(angle * pi / 180) * 5
+      y2 = cos(angle * pi / 180) * 5 + crossing_point[2]
+    }
+    assign(MT_line_name, c(crossing_point[1], crossing_point[2], x2, y2))
+  }
+
+  if (side == "RIGHT") {
+    MT_hx_lat <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] + 1,
+                                             MTH_hx_line[4], MTH_hx_line[1] +
+                                               1, MTH_hx_line[2])))
+    MT_hx_med <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] - 1,
+                                             MTH_hx_line[4], MTH_hx_line[1] -
+                                               1, MTH_hx_line[2])))
+    MT_12_lat <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] + 1,
+                                             MTH_12_line[4], MTH_12_line[1] +
+                                               1, MTH_12_line[2])))
+    MT_12_med <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] - 1,
+                                             MTH_12_line[4], MTH_12_line[1] -
+                                               1, MTH_12_line[2])))
+    MT_23_lat <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] + 1,
+                                             MTH_23_line[4], MTH_23_line[1] +
+                                               1, MTH_23_line[2])))
+    MT_23_med <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] - 1,
+                                             MTH_23_line[4], MTH_23_line[1] -
+                                               1, MTH_23_line[2])))
+    MT_34_lat <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] + 1,
+                                             MTH_34_line[4], MTH_34_line[1] +
+                                               1, MTH_34_line[2])))
+    MT_34_med <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] - 1,
+                                             MTH_34_line[4], MTH_34_line[1] -
+                                               1, MTH_34_line[2])))
+    MT_45_lat <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] + 1,
+                                             MTH_45_line[4], MTH_45_line[1] +
+                                               1, MTH_45_line[2])))
+    MT_45_med <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] - 1,
+                                             MTH_45_line[4], MTH_45_line[1] -
+                                               1, MTH_45_line[2])))
+  } else if (side == "LEFT") {
+    MT_hx_lat <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] - 1,
+                                             MTH_hx_line[4], MTH_hx_line[1] -
+                                               1, MTH_hx_line[2])))
+    MT_hx_med <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] + 1,
+                                             MTH_hx_line[4], MTH_hx_line[1] +
+                                               1, MTH_hx_line[2])))
+    MT_12_lat <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] - 1,
+                                             MTH_12_line[4], MTH_12_line[1] -
+                                               1, MTH_12_line[2])))
+    MT_12_med <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] + 1,
+                                             MTH_12_line[4], MTH_12_line[1] +
+                                               1, MTH_12_line[2])))
+    MT_23_lat <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] - 1,
+                                             MTH_23_line[4], MTH_23_line[1] -
+                                               1, MTH_23_line[2])))
+    MT_23_med <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] + 1,
+                                             MTH_23_line[4], MTH_23_line[1] +
+                                               1, MTH_23_line[2])))
+    MT_34_lat <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] - 1,
+                                             MTH_34_line[4], MTH_34_line[1] -
+                                               1, MTH_34_line[2])))
+    MT_34_med <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] + 1,
+                                             MTH_34_line[4], MTH_34_line[1] +
+                                               1, MTH_34_line[2])))
+    MT_45_lat <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] - 1,
+                                             MTH_45_line[4], MTH_45_line[1] -
+                                               1, MTH_45_line[2])))
+    MT_45_med <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] + 1,
+                                             MTH_45_line[4], MTH_45_line[1] +
+                                               1, MTH_45_line[2])))
+  }
+
+
+  # ===========================================================================
+
+  # Define heel and midfoot cutting areas. Length of foot is taken as min
+  # bounding box.
+  ## Which sides of BBox are longest?
+  s1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
+                (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
+  s2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
+                (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
+  s3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
+                (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
+  s4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
+                (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
+  longsides <- order(-c(s1d, s2d, s3d, s4d))
+  longsides <- longsides[c(1,2)]
+
+  ## Get coordinate pairs for longside lines
+  if (is.element(1, longsides) == TRUE & is.element(3, longsides) == TRUE) {
+    longside1 <- as.vector(t(mbb$pts[c(1,2), ]))
+    longside2 <- as.vector(t(mbb$pts[c(3,4), ]))
+  } else if (is.element(2, longsides) == TRUE &
+             is.element(4, longsides) == TRUE) {
+    longside1 <- as.vector(t(mbb$pts[c(2,3), ]))
+    longside2 <- as.vector(t(mbb$pts[c(4,1), ]))
+  }
+
+  ## Reorder coordinates to ensure lowest y is first
+  if (longside1[2] > longside1[4]) {longside1 = longside1[c(3, 4, 1, 2)]}
+  if (longside2[2] > longside2[4]) {longside2 = longside2[c(3, 4, 1, 2)]}
+
+  ## Find coordinate pairs for 27% and 55% BBox lines
+  if(longside1[1] >= longside1[3]) {
+    p1x_27 = (abs(longside1[1] - longside1[3]) * 0.27) - max(longside1[c(1,3)])
+    p1y_27 = ((longside1[4] - longside1[2]) * 0.27) + longside1[2]
+    p1x_55 = (abs(longside1[1] - longside1[3]) * 0.55) - max(longside1[c(1,3)])
+    p1y_55 = ((longside1[4] - longside1[2]) * 0.55) + longside1[2]
+  } else if(longside1[1] < longside1[3]) {
+    p1x_27 = (abs(longside1[1] - longside1[3]) * 0.27) + min(longside1[c(1,3)])
+    p1y_27 = ((longside1[4] - longside1[2]) * 0.27) + longside1[2]
+    p1x_55 = (abs(longside1[1] - longside1[3]) * 0.55) + min(longside1[c(1,3)])
+    p1y_55 = ((longside1[4] - longside1[2]) * 0.55) + longside1[2]
+  }
+
+  if (longside2[1] >= longside2[3]) {
+    p2x_27 = (abs(longside2[1] - longside2[3]) * 0.27) - max(longside2[c(1,3)])
+    p2y_27 = ((longside2[4] - longside2[2]) * 0.27) + longside2[2]
+    p2x_55 = (abs(longside2[1] - longside2[3]) * 0.55) - max(longside2[c(1,3)])
+    p2y_55 = ((longside2[4] - longside2[2]) * 0.55) + longside2[2]
+  } else if (longside2[1] < longside2[3]) {
+    p2x_27 = (abs(longside2[1] - longside2[3]) * 0.27) + min(longside2[c(1,3)])
+    p2y_27 = ((longside2[4] - longside2[2]) * 0.27) + longside2[2]
+    p2x_55 = (abs(longside2[1] - longside2[3]) * 0.55) + min(longside2[c(1,3)])
+    p2y_55 = ((longside2[4] - longside2[2]) * 0.55) + longside2[2]
+  }
+
+  ## Make 27% and 55% line vectors
+  l_27 <- c(p1x_27, p1y_27, p2x_27, p2y_27)
+  l_55 <- c(p1x_55, p1y_55, p2x_55, p2y_55)
+
+  ## Mid 2nd line angle
+  alpha_2 <- (MTH_12_alpha + MTH_23_alpha) / 2
+
+  ## Find where 2nd mid line and 27% and 55% lines cross
+  l27_int <- as.vector(line_int(MTH_22_line, l_27))
+  l55_int <- as.vector(line_int(MTH_22_line, l_55))
+
+  ## Eqn for perpindicular lines
+  m3 <- -1 / ((MTH_22_line[4] - MTH_22_line[2]) /
+                (MTH_22_line[3] - MTH_22_line[1]))
+  c3 <- l27_int[2] - (m3 * l27_int[1])
+  c4 <- l55_int[2] - (m3 * l55_int[1])
+  l27 <- c(1, ((m3 * 1) + c3), -1, ((m3 * -1) + c3))
+  l55 <- c(1, ((m3 * 1) + c4), -1, ((m3 * -1) + c4))
+
+  ## Form polygons that will make cuts
+  heel_cut_dist <- readWKT(vector_to_polygon(c(l27[1], l27[2], l27[3], l27[4],
+                                               l27[3], l27[4] + 1, l27[1],
+                                               l27[2] + 1)))
+  mfoot_cut_prox <- readWKT(vector_to_polygon(c(l27[1], l27[2], l27[3], l27[4],
+                                                l27[3], l27[4] - 1, l27[1],
+                                                l27[2] - 1)))
+  mfoot_cut_dist <- readWKT(vector_to_polygon(c(l55[1], l55[2], l55[3], l55[4],
+                                                l55[3], l55[4] + 1, l55[1],
+                                                l55[2] + 1)))
+  ffoot_cut_prox <- readWKT(vector_to_polygon(c(l55[1], l55[2], l55[3], l55[4],
+                                                l55[3], l55[4] - 1,
+                                                l55[1], l55[2] - 1)))
+
+
+  # ===========================================================================
+
+  # Define toe area
+  ## Make smaller dataframes
+  max_df2 <- max_df[1:round(nrow(max_df) * 0.5), ]
+  max_df3 <- max_df2[2:nrow(max_df2), ]
+
+  ## Find front edge of toes
+  f_edge <- apply(max_df2, 2, function(x) which(x > 0)[1])
+
+  ## Find side-specific first active column (columns with hallux essentially)
+  if(side == "RIGHT") {f_edge_act <- which(!is.na(f_edge))[1]}
+  if(side == "LEFT") {
+    f_edge_act <- length(f_edge) - which(!is.na(rev(f_edge)))[1]
+  }
+
+  ## Prepare empty variables that will be filled using toe line algorithm
+  lmin <- c(rep(NA), ncol(max_df2))
+  lmin2 <- list()
+  lmin3 <- list()
+  d_mat <- matrix(NA, nrow(max_df2) - 1, ncol(max_df2))
+
+  ## TRUE/FALSE matrices for local minima and maxima
+  TFmat <- rollapply(max_df2, 2, function(x) which.min(x) == 2)
+  FTmat <- rollapply(max_df2, 2, function(x) which.max(x) == 2)
+
+  ## Difference matrix
+  d_mat <- apply(max_df2, 2, function(x) diff(x))
+
+  ## In TFmat (minima), make row 1 FALSE
+  TFmat[1, ] <- FALSE
+
+  ## In TFmat, adjust to ensure only local minima are detected
+  TFmat[TFmat == TRUE & d_mat == 0 & !max_df3 == 0] <- FALSE
+  TFmat[nrow(TFmat), ] <- FALSE
+
+  ## Produce initial toe line
+  for (i in 1:ncol(max_df2)) {
+    # Get locations of maxs and mins from TF and FT matrices
+    lmin2[[i]] = which(rollapply(TFmat[ ,i], 2, identical, c(TRUE, FALSE)))
+    lmin3[[i]] = which(rollapply(FTmat[ ,i], 2, identical, c(TRUE, FALSE)))
+
+    if(length(lmin2[[i]]) >= 2 & lmin2[[i]][2] - lmin2[[i]][1] < sens) {
+      lmin2[[i]] = lmin2[[i]][-1]
+    }
+
+    # At point where lmin2 is still a list, check that each identified min is
+    # at least 10% lower than its two neighbours in the column
+    for (j in 1:length(lmin2[[i]])) {
+      if(length(lmin2[[i]]) >= 1) {
+        if (max_df2[lmin2[[i]][j] + 1,i] * 1.1 >
+            max_df2[lmin2[[i]][j] + 2,i] &
+            max_df2[lmin2[[i]][j] + 1,i] * 1.1 >
+            max_df2[lmin2[[i]][j],i ]) {
+          lmin2[[i]][j] = NA
+        }
+      }
+    }
+
+    if(length(lmin3[[i]]) == 1 & lmin3[[i]][1] > 9) {
+      lmin2[[i]][1] = NA
+    }
+
+    # Remove 1st element if too close to front edge
+    if (!is.na(lmin2[[i]][1]) & lmin2[[i]][1] < f_edge[i] + 3) {
+      lmin2[[i]][1] = NA
+    }
+
+
+    lmin[i] <- lmin2[[i]][1]
+  }
+
+  ## Fix lateral columns (if required)
+  h_lmin <- round(length(lmin) / 2)
+  if (side == "RIGHT") {
+    for (i in (length(lmin) - 4):length(lmin)) {
+      lmin2[[i]] = which(rollapply(TFmat[ ,i], 2, identical, c(TRUE, FALSE)))
+      lmin3[[i]] = which(rollapply(FTmat[ ,i], 2, identical, c(TRUE, FALSE)))
+      if (length(lmin3[[i]]) == 0) {lmin3[[i]] = NA}
+      if (length(lmin2[[i]]) == 0) {lmin2[[i]] = NA}
+      if (length(lmin3[[i]]) > 1) {lmin3[[i]] = lmin3[[i]][length(lmin3[[i]])]}
+      if (lmin2[[i]][1] < lmin3[[i]]) {
+        lmin2[[i]] = max(lmin2[[i]][lmin2[[i]] <= lmin3[[i]]])
+      }
+      lmin[i] = lmin2[[i]]
+    }
+  }
+
+  if (side == "LEFT") {
+    for (i in 1:4) {
+      lmin2[[i]] = which(rollapply(TFmat[ ,i], 2, identical, c(TRUE, FALSE)))
+      lmin3[[i]] = which(rollapply(FTmat[ ,i], 2, identical, c(TRUE, FALSE)))
+      if (length(lmin3[[i]]) == 0) {lmin3[[i]] = NA}
+      if (length(lmin2[[i]]) == 0) {lmin2[[i]] = NA}
+      if (length(lmin3[[i]]) > 1) {lmin3[[i]] = lmin3[[i]][length(lmin3[[i]])]}
+      if (lmin2[[i]][1] < lmin3[[i]]) {
+        lmin2[[i]] = max(lmin2[[i]][lmin2[[i]] <= lmin3[[i]]])
+      }
+      lmin[i] = lmin2[[i]][1]
+    }
+  }
+
+  ## Remove from lmin points too far from front edge (all)
+  lmin[lmin > 18] <- NA
+  lmin[lmin > (f_edge + 10)] <- NA
+
+  ## Remove points too close to front edge (medial side) from lmin
+  if (side == "RIGHT") {
+    for (i in f_edge_act:(f_edge_act + 8)) {
+      if (!is.na(lmin[i]) & lmin[i] < f_edge[i] + 3) {lmin[i] = NA}
+    }
+  }
+  if (side == "LEFT") {
+    for (i in (f_edge_act - 8):f_edge_act) {
+      if (!is.na(lmin[i]) & lmin[i] < f_edge[i] + 3) {lmin[i] = NA}
+    }
+  }
+
+  ## Remove "kinks" in line
+  for (i in 2:(length(lmin) - 1)) {
+    if (!any(is.na(c(lmin[i - 1], lmin[i], lmin[i + 1]))) &
+        lmin[i] >= lmin[i + 1] + 2 & lmin[i] >= lmin[i - 1] + 1) {
+      lmin[i] <- NA
+    }
+    if (!any(is.na(c(lmin[i - 1], lmin[i], lmin[i + 1]))) &
+        lmin[i] >= lmin[i + 1] + 1 & lmin[i] >= lmin[i - 1] + 2) {
+      lmin[i] <- NA
+    }
+    if (!any(is.na(c(lmin[i - 1], lmin[i], lmin[i + 1]))) &
+        lmin[i] <= lmin[i + 1] - 2 & lmin[i] <= lmin[i - 1] - 1) {
+      lmin[i] <- NA
+    }
+    if (!any(is.na(c(lmin[i - 1], lmin[i], lmin[i + 1]))) &
+        lmin[i] <= lmin[i + 1] - 1 & lmin[i] <= lmin[i - 1] - 2) {
+      lmin[i] <- NA
+    }
+  }
+
+  ## Fix outer edges
+  if (side == "LEFT") {
+    lmin3a = which(rollapply(FTmat[ ,1], 2, identical, c(TRUE, FALSE)))
+    lmin3b = which(rollapply(TFmat[ ,1], 2, identical, c(FALSE, TRUE)))
+    if (is.na(lmin[1]) == TRUE & length(lmin3a) >= 3) {
+      lmin[1] = lmin3b[2]
+    }
+  } else if (side == "RIGHT") {
+    lmin3a = which(rollapply(FTmat[ ,length(lmin)], 2, identical,
+                             c(TRUE, FALSE)))
+    lmin3b = which(rollapply(TFmat[ ,length(lmin)], 2, identical,
+                             c(FALSE, TRUE)))
+    if (is.na(lmin[length(lmin)]) == TRUE & length(lmin3a) >= 3) {
+      lmin[length(lmin)] = lmin3b[2]
+    }
+  }
+
+  # Identify columns to keep i.e. not NA
+  cols_keep <- which(!is.na(lmin))
+
+  # Identify columns to skip
+  cols_skip <- which(is.na(lmin))
+
+  # Replace NAs in lmin with 1s (just for logic purposes, remove later)
+  lmin[is.na(lmin)] <- 1
+
+  # Does lmin have == value in the next rows? Adjust if TRUE
+  lmin4 <- lmin
+  for (i in cols_keep) {
+    if (nrow(max_df2) >= lmin[i] + 2) {
+      if (max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 2, i]) {
+        lmin4[i] = lmin4[i] + 0.5
+      }
+    }
+
+    if (nrow(max_df2) >= lmin[i] + 3) {
+      if (max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 2, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 3, i]) {
+        lmin4[i] = lmin4[i] + 0.5
+      }
+    }
+
+    if (nrow(max_df2) >= lmin[i] + 4) {
+      if (max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 2, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 3, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 4, i]) {
+        lmin4[i] = lmin4[i] + 0.5
+      }
+    }
+
+    if (nrow(max_df2) >= lmin[i] + 5) {
+      if (max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 2, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 3, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 4, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 5, i]) {
+        lmin4[i] = lmin4[i] + 0.5
+      }
+    }
+
+    if (nrow(max_df2) >= lmin[i] + 6) {
+      if (max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 2, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 3, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 4, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 5, i] &
+          max_df2[lmin[i] + 1, i] == max_df2[lmin[i] + 6, i]) {
+        lmin4[i] = lmin4[i] + 0.5
+      }
+    }
+  }
+
+  # Turn lmin into coordinates for toe line
+  x_cor_lmin <- seq(from = 0.0025, by = 0.005, length.out = ncol(max_df))
+  y_cor_lmin <- ((nrow(max_df) * 0.005) - 0.0025) - (lmin4 * 0.005)
+  toe_line_df <- data.frame(x = x_cor_lmin, y = y_cor_lmin)
+  toe_line_df <- toe_line_df[-cols_skip, ]
+  toe_line <- c(t(toe_line_df))
+
+  # Add points to make cut box distal
+  toe_cut_dist <- c(toe_line, toe_line[length(toe_line) - 1] + 1,
+                    toe_line[length(toe_line)],
+                    toe_line[length(toe_line) - 1] + 1,
+                    toe_line[length(toe_line)] + 1,
+                    toe_line[1] - 1, toe_line[2] + 1,
+                    toe_line[1] - 1, toe_line[2])
+  toe_cut_dist <- readWKT(vector_to_polygon(toe_cut_dist))
+
+  # Add points to make cut box proximal
+  toe_cut_prox <- c(toe_line, toe_line[length(toe_line) - 1] + 1,
+                    toe_line[length(toe_line)],
+                    toe_line[length(toe_line) - 1] + 1,
+                    toe_line[length(toe_line)] - 1, toe_line[1] - 1,
+                    toe_line[2]-1, toe_line[1] - 1, toe_line[2])
+  toe_cut_prox <- readWKT(vector_to_polygon(toe_cut_prox))
+
+
+  # ===========================================================================
+
+  # Make all masks
+  heel_mask <- gDifference(chull_ex, heel_cut_dist)
+  midfoot_mask <- gDifference(chull_ex, mfoot_cut_prox)
+  midfoot_mask <- gDifference(midfoot_mask, mfoot_cut_dist)
+  forefoot_mask <- gDifference(chull_ex, ffoot_cut_prox)
+  forefoot_mask <- gDifference(forefoot_mask, toe_cut_dist)
+  hallux_mask <- gDifference(chull_ex, toe_cut_prox)
+  hallux_mask <- gDifference(hallux_mask, MT_hx_lat)
+  l_toes_mask <- gDifference(chull_ex, toe_cut_prox)
+  l_toes_mask <- gDifference(l_toes_mask, MT_hx_med)
+  MTH_1_mask <- gDifference(forefoot_mask, MT_12_lat)
+  MTH_2_mask <- gDifference(forefoot_mask, MT_12_med)
+  MTH_2_mask <- gDifference(MTH_2_mask, MT_23_lat)
+  MTH_3_mask <- gDifference(forefoot_mask, MT_23_med)
+  MTH_3_mask <- gDifference(MTH_3_mask, MT_34_lat)
+  MTH_4_mask <- gDifference(forefoot_mask, MT_34_med)
+  MTH_4_mask <- gDifference(MTH_4_mask, MT_45_lat)
+  MTH_5_mask <- gDifference(forefoot_mask, MT_45_med)
+
+  masks_emed <- list("heel_mask", "midfoot_mask", "forefoot_mask",
+                     "hallux_mask", "l_toes_mask", "MTH_1_mask", "MTH_2_mask",
+                     "MTH_3_mask", "MTH_4_mask", "MTH_5_mask")
+  masks_emed_df <- list("heel_mask_df", "midfoot_mask_df", "forefoot_mask_df",
+                        "hallux_mask_df", "l_toes_mask_df", "MTH_1_mask_df",
+                        "MTH_2_mask_df", "MTH_3_mask_df", "MTH_4_mask_df",
+                        "MTH_5_mask_df")
+
+  #--------------------------------------------------------------------------
+  if (plot == TRUE) {
+    ##Plot Footprint and masks for checking
+    for (i in 1:length(masks_emed)) {
+      mask_df <- fortify(get(masks_emed[[i]]))
+      mask_df <- data.frame(x = mask_df$long, y = mask_df$lat)
+      assign(masks_emed_df[[i]], mask_df)
+    }
+
+    # Plot footprint and masks
+    g <- plot_pressure(pressure_data, "max", plot = FALSE)
+    g <- g + geom_path(data = heel_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = midfoot_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = MTH_1_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = MTH_2_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = MTH_3_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = MTH_4_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = MTH_5_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = hallux_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = l_toes_mask_df, aes(x = x, y = y),
+                       colour = "red", size = 1)
+    g <- g + geom_path(data = chull_ex_df, aes(x = x, y = y),
+                       colour = "blue", size = 1)
+    g <- g + coord_fixed()
+    print(g)
+  }
+
+  # Return masks for analysis
+  mask_list <- list(heel_mask, midfoot_mask, forefoot_mask, hallux_mask,
+                    l_toes_mask, MTH_1_mask, MTH_2_mask, MTH_3_mask,
+                    MTH_4_mask, MTH_5_mask)
+  return(mask_list)
+}
+
+
+# =============================================================================
+
 #' Manually define orthoganal area
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
+#' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param image_value String. "max" = footprint of maximum sensors. "mean"
 #'   average value of sensors over time (usually for static analyses)
@@ -1269,15 +1945,6 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
   # Helper functions
-  vector_to_polygon <- function(x) {
-    xa <- c()
-    for (i in 1:((length(x)) / 2)) {
-      xa <- paste0(xa, x[(2*i) - 1], " ", x[2 * i], ", ")
-    }
-
-    xb <- readWKT(paste0("POLYGON ((", xa, x[1], " ", x[2], "))"))
-    return(xb)
-  } #Turns coords into polygon
   sensor_to_polygon <- function(act_sens, row_no, max_df_rows, max_df_cols) {
     sensor_x_coord <- (act_sens[row_no, 2] * 0.005) - 0.0025
     sensor_y_coord <- ((max_df_rows * 0.005) - 0.0025) -
@@ -1290,53 +1957,43 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     y3 <- sensor_y_coord - 0.0025
     x4 <- sensor_x_coord - 0.0025
     y4 <- sensor_y_coord - 0.0025
-    xy <- c(x1, y1, x2, y2, x3, y3, x4, y4)
-    sens_polygon <- vector_to_polygon(xy)
+    sens_polygon <- st_polygon(list(matrix(c(x1, x2, x3, x4, x1,
+                                             y1, y2, y3, y4, y5), 5, 2)))
     return(sens_polygon)
   }
 
-  ## Organise sensors into region groups
-  # Find max footprint
-  max_df <- apply(simplify2array(x), 1:2, max)
-  max_df_rows <- nrow(max_df)
-  max_df_cols <- ncol(max_df)
+  # sensor area
+  sensor_area <- pressure_data[[2]][1] * pressure_data[[2]][2]
 
-  # Find which sensors are non zero
+  # Make active sensors into polygons
+  ## Find max footprint
+  max_df <- apply(simplify2array(pressure_data[[1]]), 1:2, max)
+
+  ## overall dimensions
+  dims <- dim(max_df)
+
+  ## Find which sensors are non zero
   act_sens <- which(max_df > 0, arr.ind = TRUE)
 
-  # make active sensors into a list of polygons
+  ## make list of polygons
   act_sens_poly <- list()
   for (i in 1:nrow(act_sens)) {
-    act_sens_poly[[i]] <- sensor_to_polygon(act_sens, i, max_df_rows,
-                                            max_df_cols)
+    act_sens_poly[[i]] <- sensor_to_polygon(act_sens, i, dims[1], dims[2])
   }
 
   # For each region mask, find which polygons intersect
-  overlap_list <- vector("list", length(masks))
+  sens_mask_df <- data.frame(NA, nrow = length(act_sens), ncol = length(masks))
   for (i in 1:length(masks)){
     for (j in 1:length(act_sens_poly)) {
-      x <- gIntersects(masks[[i]], act_sens_poly[[j]])
-      if (x == TRUE) {
-        overlap_list[[i]] <- append(overlap_list[[i]], j)
+      x <- st_intersection(masks[[i]], act_sens_poly[[j]])
+      if (length(x) > 0) {
+         sens_mask_df[j, i] <- st_area(x) / sensor_area
       }
     }
   }
 
-
-
-  # Apply weightings with adjustments if partial sensors are to be included
-  #Measure overlapping area
-  #Overlap_areas <- vector("list", length(masks))
-  #for (i in 1:length(Overlap_list)) {
-  #  for (j in 1:length(Overlap_list[[i]])) {
-  #    x <- Intersect_area(act_sens_poly[Overlap_list[[i]][j]],masks[[i]])
-  #    x <- gArea(x)
-  #    x <- x/(pedarpoly_area[Overlap_list[[i]][j]])
-  #    x <- x*pedarSensorAreas[Overlap_list[[i]][j]]
-  #    Overlap_areas[[i]] <- append(Overlap_areas[[i]], x)
-  #  }
-  #}
-
+  # combine sensor locations with mask areas
+  sens_mask_df <- cbind(act_sens, sens_mask_df)
 
   # Analyse regions for maximum value of any sensor within region during trial
   if (press_peak_sensor == TRUE) {
@@ -1396,9 +2053,19 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for force throughout the trial (outputs vector)
   if(force_ts == TRUE) {
-
+    mask_force <- data.frame(NA, nrow = dim(pressure[[1]])[3], ncol = length(masks))
+    for (mask in seq_along(masks)) {
+      mask_mat <- sens_mask_df[, (mask + 2)]
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- pressure_data[[1]][i]
+        force <- sum(P[sens_mask_df[, 1], sens_mask_df[, 2]] * mask_mat)
+        mask_force[i, mask] <- force
+      }
+    }
   }
-  return(peak_sens)
+
+  # return
+  return(mask_force)
 }
 
 
