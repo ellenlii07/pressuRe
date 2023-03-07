@@ -1,14 +1,13 @@
 # to do
-# check force curve is data in N?
 # add input tests to throw errors
 # pti to pressure curve function
 # plot_pressure option to choose different colors
-# use sensor coordinate function in other plot functions
 # pedar import
 # fscan import
 # combine load emed functions (use row col numbers)
 # output variables...
 # edit mask functionality using identity
+# automask to work on different sensors (currently just emed)
 
 
 
@@ -20,13 +19,14 @@ library(tidyverse)
 library(sf)
 library(rgeos)
 library(zoo)
-library(concaveman)
 #library(scales)
 
 
 # =============================================================================
 
-#' Load emed data
+#' @title Load_emed
+#' @description Imports and formats .lst files collected on emed system and
+#'    exported from Novel software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @param rem_zeros Logical. If TRUE, remove columns and rows from edges which
@@ -40,6 +40,7 @@ library(concaveman)
 #'  }
 #' @examples
 #' pressure_data = load_emed("example_data/emed test.lst")
+#' @export
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
   # test inputs
@@ -136,7 +137,7 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 
 load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
   # Read unformatted emed data
-  pressure_raw <- readLines(file_path, warn = FALSE)
+  pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
   # get sensor size
   sens_size_ln <- which(grepl("Sensor size", pressure_raw))[1]
@@ -200,7 +201,7 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
       # row numbers
       rn <- unname(unlist((z[, 1])))
       z <- as.matrix(z[, 2:ncol(z)])
-
+      z <- matrix(as.numeric(z, ncol = ncol(z)))
 
       # add to array
       pressure_array[rn, cn, i] <- z
@@ -998,10 +999,61 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' @param plot Logical. Whether to play the animation
 #' @return List. Contains polygon with each mask
 #' @examples
-#' automask_emed(pressure_data, sens = 4, plot = TRUE)
+#' automask(pressure_data, sens = 4, plot = TRUE)
 
-automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
+automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
   # Helper functions
+  getMinBBox <- function(xy) {
+    stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
+
+    ## rotating calipers algorithm using the convex hull
+    H    <- chull(xy)                    # hull indices, vertices ordered clockwise
+    n    <- length(H)                    # number of hull vertices
+    hull <- xy[H, ]                      # hull vertices
+
+    ## unit basis vectors for all subspaces spanned by the hull edges
+    hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
+    hLens <- sqrt(rowSums(hDir^2))       # length of basis vectors
+    huDir <- diag(1/hLens) %*% hDir      # scaled to unit length
+
+    ## unit basis vectors for the orthogonal subspaces
+    ## rotation by 90 deg -> y' = x, x' = -y
+    ouDir <- cbind(-huDir[ , 2], huDir[ , 1])
+
+    ## project hull vertices on the subspaces spanned by the hull edges, and on
+    ## the subspaces spanned by their orthogonal complements - in subspace coords
+    projMat <- rbind(huDir, ouDir) %*% t(hull)
+
+    ## range of projections and corresponding width/height of bounding rectangle
+    rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
+    rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
+    widths  <- numeric(n)
+    heights <- numeric(n)
+    for(i in seq(along=H)) {
+      rangeH[i, ] <- range(projMat[  i, ])
+      rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
+      widths[i]   <- abs(diff(rangeH[i, ]))
+      heights[i]  <- abs(diff(rangeO[i, ]))
+    }
+
+    ## extreme projections for min-area rect in subspace coordinates
+    eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
+    hProj <- rbind(   rangeH[eMin, ], 0)
+    oProj <- rbind(0, rangeO[eMin, ])
+
+    ## move projections to rectangle corners
+    hPts <- sweep(hProj, 1, oProj[ , 1], "+")
+    oPts <- sweep(hProj, 1, oProj[ , 2], "+")
+
+    ## corners in standard coordinates, rows = x,y, columns = corners
+    ## in combined (4x2)-matrix: reverse point order to be usable in polygon()
+    basis <- cbind(huDir[eMin, ], ouDir[eMin, ])  # basis formed by hull edge and orth
+    hCorn <- basis %*% hPts
+    oCorn <- basis %*% oPts
+    pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
+
+    return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
+  } #Finds minimum bounding box
   vector_to_polygon <- function(x) {
     xa <- c()
     for (i in 1:((length(x)) / 2)) {
@@ -1010,7 +1062,7 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
 
     xb <- (paste0("POLYGON ((", xa, x[1], " ", x[2], "))"))
     return(xb)
-  } # Turns coords into polygon
+  } #Turns coords into polygon
   extend_line <- function(x, extend = 1) {
     m1 = (x[4] - x[2]) / (x[3] - x[1])
     c1 = x[2] - (m1 * x[1])
@@ -1019,13 +1071,13 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
     new_y1 = m1 * new_x1 + c1
     new_y2 = m1 * new_x2 + c1
     ext_line = c(new_x1, new_y1, new_x2, new_y2)
-  } # Adds 1 unit to end of line
+  } #Adds 1 unit to end of line
   line_int <- function(x, y) {
-    # correct for vertical vectors
+    #correct for vertical vectors
     if(x[3] == x[1]) {x[1] <- x[1] + 0.0001}
     if(y[3] == y[1]) {y[1] <- y[1] + 0.0001}
 
-    # Find equation constants
+    #Find equation constants
     m1 <- (x[4] - x[2]) / (x[3] - x[1])
     m2 <- (y[4] - y[2]) / (y[3] - y[1])
     c1 <- x[2] - (m1 * x[1])
@@ -1038,7 +1090,7 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
 
     # return
     return(myResult)
-  } # Where two lines intercept
+  } #Where two lines intercept
 
 
   # ===========================================================================
@@ -1053,32 +1105,36 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
   P <- c(max_df)
   em_act_df <- data.frame(x = sens_coords$x_coord, y = sens_coords$y_coord,
                           P = P)
-  em_act_df <- em_act_df[which(P > 0), ]
+  em_act_df <- em_act_df[which(P >= 5), ]
   em_act_df$P <- NULL
+
+
+  # ===========================================================================
 
   # Define minimum bounding box
   em_act_m <- as.matrix(em_act_df)
-  em_act_mp <- st_multipoint(em_act_m)
-  mbb <- st_as_sfc(st_bbox(st_multipoint(em_act_m)))
+  mbb <- getMinBBox(em_act_m)
+  mbb_df <- data.frame(x = mbb$pts[, 1], y = mbb$pts[, 2])
 
-  # Define convex hull, expanding to include all active sensors
-  chull <- st_convex_hull(em_act_mp)
-  chull_expanded <- st_buffer(chull, 0.005, joinStyle = "MITRE")
-  #chull_ex_df <- fortify(chull_ex)
-  #chull_ex_df <- data.frame(x = chull_ex_df$long, y = chull_ex_df$lat)
+  # Define convex hull, expanding to include all sensors
+  chull_elements <- chull(x = em_act_df$x, y = em_act_df$y)
+  chull_polygon <- vector_to_polygon(c(t(em_act_df[chull_elements, ])))
+  chull_ex <- gBuffer(readWKT(chull_polygon), width = 0.005,
+                      joinStyle = "MITRE")
+  chull_ex_df <- fortify(chull_ex)
+  chull_ex_df <- data.frame(x = chull_ex_df$long, y = chull_ex_df$lat)
 
 
   # ===========================================================================
 
   # Define angles for dividing lines between metatarsals
   ## Find longest vectors (these are the med and lat edges of the footprint)
-  chull_ex_df <- as.data.frame(as.matrix(chull))
-  z_dist <- Mod(diff(chull_ex_df$V1 + 1i * chull_ex_df$V2))
+  z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
   vec_1 <- order(z_dist, decreasing = TRUE)[1]
   vec_2 <- order(z_dist, decreasing = TRUE)[2]
 
   ## Get coords for longest vector, reorder so lowest (y-axis) is first
-  vec_1 <- c(chull_expanded_df[vec_1, 1], chull_ex_df[vec_1, 2],
+  vec_1 <- c(chull_ex_df[vec_1, 1], chull_ex_df[vec_1, 2],
              chull_ex_df[vec_1 + 1, 1], chull_ex_df[vec_1 + 1, 2])
   vec_2 <- c(chull_ex_df[vec_2, 1], chull_ex_df[vec_2,2],
              chull_ex_df[vec_2 + 1, 1], chull_ex_df[vec_2 + 1, 2])
@@ -1217,7 +1273,7 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
   }
 
 
-  # ===========================================================================
+  #-------------------------------------------------------------------------
 
   # Define heel and midfoot cutting areas. Length of foot is taken as min
   # bounding box.
@@ -1542,26 +1598,34 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
   # ===========================================================================
 
   # Make all masks
-  heel_mask <- st_as_sf(gDifference(chull_ex, heel_cut_dist))
-  midfoot_mask <- st_as_sf(gDifference(chull_ex, mfoot_cut_prox))
-  midfoot_mask <- st_as_sf(gDifference(midfoot_mask, mfoot_cut_dist))
-  forefoot_mask <- st_as_sf(gDifference(chull_ex, ffoot_cut_prox))
-  forefoot_mask <- st_as_sf(gDifference(forefoot_mask, toe_cut_dist))
-  hallux_mask <- st_as_sf(gDifference(chull_ex, toe_cut_prox))
-  hallux_mask <- st_as_sf(gDifference(hallux_mask, MT_hx_lat))
-  l_toes_mask <- st_as_sf(gDifference(chull_ex, toe_cut_prox))
-  l_toes_mask <- st_as_sf(gDifference(l_toes_mask, MT_hx_med))
-  MTH_1_mask <- st_as_sf(gDifference(forefoot_mask, MT_12_lat))
-  MTH_2_mask <- st_as_sf(gDifference(forefoot_mask, MT_12_med))
-  MTH_2_mask <- st_as_sf(gDifference(MTH_2_mask, MT_23_lat))
-  MTH_3_mask <- st_as_sf(gDifference(forefoot_mask, MT_23_med))
-  MTH_3_mask <- st_as_sf(gDifference(MTH_3_mask, MT_34_lat))
-  MTH_4_mask <- st_as_sf(gDifference(forefoot_mask, MT_34_med))
-  MTH_4_mask <- st_as_sf(gDifference(MTH_4_mask, MT_45_lat))
-  MTH_5_mask <- st_as_sf(gDifference(forefoot_mask, MT_45_med))
+  heel_mask <- gDifference(chull_ex, heel_cut_dist)
+  midfoot_mask <- gDifference(chull_ex, mfoot_cut_prox)
+  midfoot_mask <- gDifference(midfoot_mask, mfoot_cut_dist)
+  forefoot_mask <- gDifference(chull_ex, ffoot_cut_prox)
+  forefoot_mask <- gDifference(forefoot_mask, toe_cut_dist)
+  hallux_mask <- gDifference(chull_ex, toe_cut_prox)
+  hallux_mask <- gDifference(hallux_mask, MT_hx_lat)
+  l_toes_mask <- gDifference(chull_ex, toe_cut_prox)
+  l_toes_mask <- gDifference(l_toes_mask, MT_hx_med)
+  MTH_1_mask <- gDifference(forefoot_mask, MT_12_lat)
+  MTH_2_mask <- gDifference(forefoot_mask, MT_12_med)
+  MTH_2_mask <- gDifference(MTH_2_mask, MT_23_lat)
+  MTH_3_mask <- gDifference(forefoot_mask, MT_23_med)
+  MTH_3_mask <- gDifference(MTH_3_mask, MT_34_lat)
+  MTH_4_mask <- gDifference(forefoot_mask, MT_34_med)
+  MTH_4_mask <- gDifference(MTH_4_mask, MT_45_lat)
+  MTH_5_mask <- gDifference(forefoot_mask, MT_45_med)
 
-
-
+  heel_mask_ <- st_as_sf(heel_mask)
+  midfoot_mask_ <- st_as_sf(midfoot_mask)
+  forefoot_mask_ <- st_as_sf(forefoot_mask)
+  hallux_mask_ <- st_as_sf(hallux_mask)
+  l_toes_mask_ <- st_as_sf(l_toes_mask)
+  MTH_1_mask_ <- st_as_sf(MTH_1_mask)
+  MTH_2_mask_ <- st_as_sf(MTH_2_mask)
+  MTH_3_mask_ <- st_as_sf(MTH_3_mask)
+  MTH_4_mask_ <- st_as_sf(MTH_4_mask)
+  MTH_5_mask_ <- st_as_sf(MTH_5_mask)
 
   masks_emed <- list("heel_mask", "midfoot_mask", "forefoot_mask",
                      "hallux_mask", "l_toes_mask", "MTH_1_mask", "MTH_2_mask",
@@ -1607,11 +1671,19 @@ automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
   }
 
   # Return masks for analysis
-  mask_list <- list(heel_mask, midfoot_mask, forefoot_mask, hallux_mask,
-                    l_toes_mask, MTH_1_mask, MTH_2_mask, MTH_3_mask,
-                    MTH_4_mask, MTH_5_mask)
+  mask_list <- list(heel_mask = heel_mask_,
+                    midfoot_mask = midfoot_mask_,
+                    forefoot_mask = forefoot_mask_,
+                    hallux_mask = hallux_mask_,
+                    l_toe_mask = l_toes_mask_,
+                    MTH_1_mask = MTH_1_mask_,
+                    MTH_2_mask = MTH_2_mask_,
+                    MTH_3_mask = MTH_3_mask_,
+                    MTH_4_mask = MTH_4_mask_,
+                    MTH_5_mask = MTH_5_mask_)
   return(mask_list)
 }
+
 
 
 # =============================================================================
@@ -1899,7 +1971,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   sensor_to_polygon <- function(act_sens, row_no, max_df_rows, max_df_cols) {
     sensor_x_coord <- (act_sens[row_no, 2] * 0.005) - 0.0025
     sensor_y_coord <- ((max_df_rows * 0.005) - 0.0025) -
-      act_sens[row_no,1] * 0.005
+      act_sens[row_no, 1] * 0.005
     x1 <- sensor_x_coord - 0.0025
     y1 <- sensor_y_coord + 0.0025
     x2 <- sensor_x_coord + 0.0025
@@ -1933,12 +2005,14 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   }
 
   # For each region mask, find which polygons intersect
-  sens_mask_df <- data.frame(NA, nrow = length(act_sens), ncol = length(masks))
+  sens_mask_df <- matrix(rep(0, length.out = (nrow(act_sens) * length(masks))),
+                         nrow = nrow(act_sens), ncol = length(masks))
   for (i in 1:length(masks)){
     for (j in 1:length(act_sens_poly)) {
-      x <- st_intersection(masks[[i]], act_sens_poly[[j]])
-      if (length(x) > 0) {
-         sens_mask_df[j, i] <- st_area(x) / sensor_area
+      x <- st_intersects(masks[[i]], act_sens_poly[[j]])
+      if (identical(x[[1]], integer(0)) == FALSE) {
+        y <- st_intersection(masks[[i]], act_sens_poly[[j]])
+        sens_mask_df[j, i] <- st_area(y) / sensor_area
       }
     }
   }
@@ -1947,7 +2021,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   sens_mask_df <- cbind(act_sens, sens_mask_df)
 
   # Analyse regions for maximum value of any sensor within region during trial
-  if (press_peak_sensor == TRUE) {
+  if (variable == "press_peak_sensor") {
     peak_sens <- rep(NA, times = length(masks))
     for (i in 1:length(overlap_list)) {
       peak_sens[i] <- max(max_df[act_sens[overlap_list[[i]],]])
@@ -1956,66 +2030,74 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for maximum value of any sensor within region throughout
   # trial. Outputs 101 point vector
-  if(press_peak_sensor_ts == TRUE) {
+  if (variable == "press_peak_sensor_ts") {
 
   }
 
   # Analyse regions for peak regional pressure (defined as the maximum mean
   # pressure of active sensors in region during the trial)
-  if(press_peak_region == TRUE) {
+  if (variable == "press_peak_region") {
 
   }
 
   # Analyse regions for peak regional pressure (defined as the maximum mean
   # pressure of active sensors in region during the trial). Outputs 101 point vector
-  if(press_peak_region_ts == TRUE) {
+  if (variable == "press_peak_region_ts") {
 
   }
 
   # Analyse regions for overall mean pressure during the trial
-  if(press_mean_region == TRUE) {
+  if (variable == "press_mean_region") {
 
   }
 
   # Analyse regions for maximum contact area of region during trial
-  if(contact_area_peak == TRUE) {
+  if (variable == "contact_area_peak") {
 
   }
 
   # Analyse regions for contact area throughout the trial (outputs vector)
-  if(contact_area_ts == TRUE) {
+  if (variable == "contact_area_ts") {
 
   }
 
   # Analyse regions for pressure time integral (Novel definition)
-  if(press_ti_1 == TRUE) {
+  if (variable == "press_ti_1") {
 
   }
 
   # Analyse regions for pressure time integral (Melai definition)
-  if(press_ti_2 == TRUE) {
+  if (variable == "press_ti_2") {
 
   }
 
   # Analyse regions for maximum force during the trial
-  if(force_peak == TRUE) {
+  if (variable == "force_peak") {
 
   }
 
   # Analyse regions for force throughout the trial (outputs vector)
-  if(force_ts == TRUE) {
-    mask_force <- data.frame(NA, nrow = dim(pressure[[1]])[3], ncol = length(masks))
+  if (variable == "force_ts") {
+    mask_force <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
+                         nrow = dim(pressure_data[[1]])[3],
+                         ncol = length(masks))
     for (mask in seq_along(masks)) {
       mask_mat <- sens_mask_df[, (mask + 2)]
       for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- pressure_data[[1]][i]
-        force <- sum(P[sens_mask_df[, 1], sens_mask_df[, 2]] * mask_mat)
-        mask_force[i, mask] <- force
+        P <- pressure_data[[1]][, , i] * sensor_area * 1000
+        force <- rep(0, length.out = length(mask_mat))
+        for (j in 1:length(mask_mat)) (
+          force[j] <- P[sens_mask_df[j, 1], sens_mask_df[j, 2]] * mask_mat[j]
+        )
+        #force <- sum(as.vector(P[sens_mask_df[, 1], sens_mask_df[, 2]]) * mask_mat)
+        mask_force[i, mask] <- sum(force)
       }
     }
   }
 
   # return
+  mask_force <- as.data.frame(mask_force)
+  colnames(mask_force) <- names(masks)
   return(mask_force)
 }
 
