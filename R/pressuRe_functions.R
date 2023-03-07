@@ -8,6 +8,8 @@
 # fscan import
 # combine load emed functions (use row col numbers)
 # output variables...
+# edit mask functionality using identity
+
 
 
 # =============================================================================
@@ -18,6 +20,7 @@ library(tidyverse)
 library(sf)
 library(rgeos)
 library(zoo)
+library(concaveman)
 #library(scales)
 
 
@@ -997,59 +1000,8 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' @examples
 #' automask_emed(pressure_data, sens = 4, plot = TRUE)
 
-automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
+automask_emed <- function(pressure_data, side, sens = 4, plot = TRUE) {
   # Helper functions
-  getMinBBox <- function(xy) {
-    stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
-
-    ## rotating calipers algorithm using the convex hull
-    H    <- chull(xy)                    # hull indices, vertices ordered clockwise
-    n    <- length(H)                    # number of hull vertices
-    hull <- xy[H, ]                      # hull vertices
-
-    ## unit basis vectors for all subspaces spanned by the hull edges
-    hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
-    hLens <- sqrt(rowSums(hDir^2))       # length of basis vectors
-    huDir <- diag(1/hLens) %*% hDir      # scaled to unit length
-
-    ## unit basis vectors for the orthogonal subspaces
-    ## rotation by 90 deg -> y' = x, x' = -y
-    ouDir <- cbind(-huDir[ , 2], huDir[ , 1])
-
-    ## project hull vertices on the subspaces spanned by the hull edges, and on
-    ## the subspaces spanned by their orthogonal complements - in subspace coords
-    projMat <- rbind(huDir, ouDir) %*% t(hull)
-
-    ## range of projections and corresponding width/height of bounding rectangle
-    rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
-    rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
-    widths  <- numeric(n)
-    heights <- numeric(n)
-    for(i in seq(along=H)) {
-      rangeH[i, ] <- range(projMat[  i, ])
-      rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
-      widths[i]   <- abs(diff(rangeH[i, ]))
-      heights[i]  <- abs(diff(rangeO[i, ]))
-    }
-
-    ## extreme projections for min-area rect in subspace coordinates
-    eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
-    hProj <- rbind(   rangeH[eMin, ], 0)
-    oProj <- rbind(0, rangeO[eMin, ])
-
-    ## move projections to rectangle corners
-    hPts <- sweep(hProj, 1, oProj[ , 1], "+")
-    oPts <- sweep(hProj, 1, oProj[ , 2], "+")
-
-    ## corners in standard coordinates, rows = x,y, columns = corners
-    ## in combined (4x2)-matrix: reverse point order to be usable in polygon()
-    basis <- cbind(huDir[eMin, ], ouDir[eMin, ])  # basis formed by hull edge and orth
-    hCorn <- basis %*% hPts
-    oCorn <- basis %*% oPts
-    pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
-
-    return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
-  } #Finds minimum bounding box
   vector_to_polygon <- function(x) {
     xa <- c()
     for (i in 1:((length(x)) / 2)) {
@@ -1058,7 +1010,7 @@ automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
 
     xb <- (paste0("POLYGON ((", xa, x[1], " ", x[2], "))"))
     return(xb)
-  } #Turns coords into polygon
+  } # Turns coords into polygon
   extend_line <- function(x, extend = 1) {
     m1 = (x[4] - x[2]) / (x[3] - x[1])
     c1 = x[2] - (m1 * x[1])
@@ -1067,7 +1019,7 @@ automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
     new_y1 = m1 * new_x1 + c1
     new_y2 = m1 * new_x2 + c1
     ext_line = c(new_x1, new_y1, new_x2, new_y2)
-  } #Adds 1 unit to end of line
+  } # Adds 1 unit to end of line
   line_int <- function(x, y) {
     # correct for vertical vectors
     if(x[3] == x[1]) {x[1] <- x[1] + 0.0001}
@@ -1101,36 +1053,32 @@ automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
   P <- c(max_df)
   em_act_df <- data.frame(x = sens_coords$x_coord, y = sens_coords$y_coord,
                           P = P)
-  em_act_df <- em_act_df[which(P >= 5), ]
+  em_act_df <- em_act_df[which(P > 0), ]
   em_act_df$P <- NULL
-
-
-  # ===========================================================================
 
   # Define minimum bounding box
   em_act_m <- as.matrix(em_act_df)
-  mbb <- getMinBBox(em_act_m)
-  mbb_df <- data.frame(x = mbb$pts[, 1], y = mbb$pts[, 2])
+  em_act_mp <- st_multipoint(em_act_m)
+  mbb <- st_as_sfc(st_bbox(st_multipoint(em_act_m)))
 
-  # Define convex hull, expanding to include all sensors
-  chull_elements <- chull(x = em_act_df$x, y = em_act_df$y)
-  chull_polygon <- vector_to_polygon(c(t(em_act_df[chull_elements, ])))
-  chull_ex <- gBuffer(readWKT(chull_polygon), width = 0.005,
-                      joinStyle = "MITRE")
-  chull_ex_df <- fortify(chull_ex)
-  chull_ex_df <- data.frame(x = chull_ex_df$long, y = chull_ex_df$lat)
+  # Define convex hull, expanding to include all active sensors
+  chull <- st_convex_hull(em_act_mp)
+  chull_expanded <- st_buffer(chull, 0.005, joinStyle = "MITRE")
+  #chull_ex_df <- fortify(chull_ex)
+  #chull_ex_df <- data.frame(x = chull_ex_df$long, y = chull_ex_df$lat)
 
 
   # ===========================================================================
 
   # Define angles for dividing lines between metatarsals
   ## Find longest vectors (these are the med and lat edges of the footprint)
-  z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
+  chull_ex_df <- as.data.frame(as.matrix(chull))
+  z_dist <- Mod(diff(chull_ex_df$V1 + 1i * chull_ex_df$V2))
   vec_1 <- order(z_dist, decreasing = TRUE)[1]
   vec_2 <- order(z_dist, decreasing = TRUE)[2]
 
   ## Get coords for longest vector, reorder so lowest (y-axis) is first
-  vec_1 <- c(chull_ex_df[vec_1, 1], chull_ex_df[vec_1, 2],
+  vec_1 <- c(chull_expanded_df[vec_1, 1], chull_ex_df[vec_1, 2],
              chull_ex_df[vec_1 + 1, 1], chull_ex_df[vec_1 + 1, 2])
   vec_2 <- c(chull_ex_df[vec_2, 1], chull_ex_df[vec_2,2],
              chull_ex_df[vec_2 + 1, 1], chull_ex_df[vec_2 + 1, 2])
@@ -1594,23 +1542,26 @@ automask_emed <- function(pressure_data, sens = 4, plot = TRUE) {
   # ===========================================================================
 
   # Make all masks
-  heel_mask <- gDifference(chull_ex, heel_cut_dist)
-  midfoot_mask <- gDifference(chull_ex, mfoot_cut_prox)
-  midfoot_mask <- gDifference(midfoot_mask, mfoot_cut_dist)
-  forefoot_mask <- gDifference(chull_ex, ffoot_cut_prox)
-  forefoot_mask <- gDifference(forefoot_mask, toe_cut_dist)
-  hallux_mask <- gDifference(chull_ex, toe_cut_prox)
-  hallux_mask <- gDifference(hallux_mask, MT_hx_lat)
-  l_toes_mask <- gDifference(chull_ex, toe_cut_prox)
-  l_toes_mask <- gDifference(l_toes_mask, MT_hx_med)
-  MTH_1_mask <- gDifference(forefoot_mask, MT_12_lat)
-  MTH_2_mask <- gDifference(forefoot_mask, MT_12_med)
-  MTH_2_mask <- gDifference(MTH_2_mask, MT_23_lat)
-  MTH_3_mask <- gDifference(forefoot_mask, MT_23_med)
-  MTH_3_mask <- gDifference(MTH_3_mask, MT_34_lat)
-  MTH_4_mask <- gDifference(forefoot_mask, MT_34_med)
-  MTH_4_mask <- gDifference(MTH_4_mask, MT_45_lat)
-  MTH_5_mask <- gDifference(forefoot_mask, MT_45_med)
+  heel_mask <- st_as_sf(gDifference(chull_ex, heel_cut_dist))
+  midfoot_mask <- st_as_sf(gDifference(chull_ex, mfoot_cut_prox))
+  midfoot_mask <- st_as_sf(gDifference(midfoot_mask, mfoot_cut_dist))
+  forefoot_mask <- st_as_sf(gDifference(chull_ex, ffoot_cut_prox))
+  forefoot_mask <- st_as_sf(gDifference(forefoot_mask, toe_cut_dist))
+  hallux_mask <- st_as_sf(gDifference(chull_ex, toe_cut_prox))
+  hallux_mask <- st_as_sf(gDifference(hallux_mask, MT_hx_lat))
+  l_toes_mask <- st_as_sf(gDifference(chull_ex, toe_cut_prox))
+  l_toes_mask <- st_as_sf(gDifference(l_toes_mask, MT_hx_med))
+  MTH_1_mask <- st_as_sf(gDifference(forefoot_mask, MT_12_lat))
+  MTH_2_mask <- st_as_sf(gDifference(forefoot_mask, MT_12_med))
+  MTH_2_mask <- st_as_sf(gDifference(MTH_2_mask, MT_23_lat))
+  MTH_3_mask <- st_as_sf(gDifference(forefoot_mask, MT_23_med))
+  MTH_3_mask <- st_as_sf(gDifference(MTH_3_mask, MT_34_lat))
+  MTH_4_mask <- st_as_sf(gDifference(forefoot_mask, MT_34_med))
+  MTH_4_mask <- st_as_sf(gDifference(MTH_4_mask, MT_45_lat))
+  MTH_5_mask <- st_as_sf(gDifference(forefoot_mask, MT_45_med))
+
+
+
 
   masks_emed <- list("heel_mask", "midfoot_mask", "forefoot_mask",
                      "hallux_mask", "l_toes_mask", "MTH_1_mask", "MTH_2_mask",
@@ -1940,7 +1891,7 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 #'  "force_ts"
 #' @return
 #' @examples
-#'
+#'  mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
@@ -1958,7 +1909,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     x4 <- sensor_x_coord - 0.0025
     y4 <- sensor_y_coord - 0.0025
     sens_polygon <- st_polygon(list(matrix(c(x1, x2, x3, x4, x1,
-                                             y1, y2, y3, y4, y5), 5, 2)))
+                                             y1, y2, y3, y4, y1), 5, 2)))
     return(sens_polygon)
   }
 
