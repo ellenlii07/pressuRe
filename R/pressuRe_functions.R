@@ -7,7 +7,7 @@
 # combine load emed functions (use row col numbers)
 # output variables...
 # edit mask functionality using identity
-# automask to work on different sensors (currently just emed)
+# automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 
 
 
@@ -611,45 +611,6 @@ cop <- function(pressure_data) {
   # return COP coordinates
   return(COP_df)
 }
-
-
-# =============================================================================
-
-#' Coordinates of active sensors
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. Includes a 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
-#' @param active. Logical. Should the coordinates be limited to active sensors
-#' @return Data frame. x and y coordinates of sensors
-#' @examples
-#' sensor_coords(pressure_data)
-
-sensor_coords <- function(pressure_data, active = FALSE) {
-  # max pressure footprint
-  max_fp <- footprint(pressure_data)
-
-  # dimensions
-  sens_x <- pressure_data[[2]][1]
-  sens_y <- pressure_data[[2]][2]
-
-  # data frame with active sensors as coordinates
-  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
-  x_cor <- rep(x_cor, each = nrow(max_fp))
-  y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
-               by = (-1 * sens_y), length.out = nrow(max_fp))
-  y_cor <- rep(y_cor, times = ncol(max_fp))
-  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
-
-  # remove inactive sensors if required
-  if (active == TRUE) {
-    P <- c(max_fp)
-    coords <- coords[which(P > 0), ]
-  }
-
-  # return sensor coordinates
-  return(coords)
-}
-
 
 
 # =============================================================================
@@ -1877,7 +1838,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   }
 
   # sensor area
-  sensor_area <- pressure_data[[2]][1] * pressure_data[[2]][2]
+  sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
   # Make active sensors into polygons
   ## Find max footprint
@@ -1994,6 +1955,45 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
 
 # =============================================================================
+# =============================================================================
+
+# helper functions
+
+#' Coordinates of active sensors
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @param active. Logical. Should the coordinates be limited to active sensors
+#' @return Data frame. x and y coordinates of sensors
+#' @examples
+#' sensor_coords(pressure_data)
+
+sensor_coords <- function(pressure_data, active = FALSE) {
+  # max pressure footprint
+  max_fp <- footprint(pressure_data)
+
+  # dimensions
+  sens_x <- pressure_data[[3]][1]
+  sens_y <- pressure_data[[3]][2]
+
+  # data frame with active sensors as coordinates
+  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
+  x_cor <- rep(x_cor, each = nrow(max_fp))
+  y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
+               by = (-1 * sens_y), length.out = nrow(max_fp))
+  y_cor <- rep(y_cor, times = ncol(max_fp))
+  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
+
+  # remove inactive sensors if required
+  if (active == TRUE) {
+    P <- c(max_fp)
+    coords <- coords[which(P > 0), ]
+  }
+
+  # return sensor coordinates
+  return(coords)
+}
+
 
 #' gglocator
 #' @param n Integer. Number of points to select
@@ -2071,11 +2071,6 @@ gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
 }
 
 
-# =============================================================================
-# =============================================================================
-
-# helper functions
-
 #' @param xy Matrix. n row by 2 column with x-y coords of points to be bounded
 getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
@@ -2128,3 +2123,28 @@ getMinBBox <- function(xy) {
 
   return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
 }
+
+
+#' sf masks to dataframe
+masks_2_df <- function(masks) {
+  # no. of masks
+  n_masks <- length(masks)
+
+  # empty df
+  df <- data.frame(mask = factor(),
+                   x = double(),
+                   y = double())
+
+  # get coordinates of each mask and store in df
+  for (mask in seq_along(masks)) {
+    coords <- st_coordinates(masks[[mask]])[, c(1:2)]
+    mask_name <- rep(names(masks)[mask], length.out = nrow(coords))
+    df_ <- data.frame(mask = mask_name, x = coords[, 1], y = coords[, 2])
+    df <- bind_rows(df, df_)
+  }
+
+  # return
+  return(df)
+}
+
+masks_2_df(masks)
