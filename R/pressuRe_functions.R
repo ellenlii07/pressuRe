@@ -8,6 +8,7 @@
 # output variables...
 # edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
+# allow for multiple masking schemes
 
 
 
@@ -15,11 +16,9 @@
 
 # Packages required
 library(tidyverse)
-#library(rgl)
 library(sf)
 library(rgeos)
 library(zoo)
-#library(scales)
 
 
 # =============================================================================
@@ -1486,43 +1485,6 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
                         "hallux_mask_df", "l_toes_mask_df", "MTH_1_mask_df",
                         "MTH_2_mask_df", "MTH_3_mask_df", "MTH_4_mask_df",
                         "MTH_5_mask_df")
-
-  #--------------------------------------------------------------------------
-  if (plot == TRUE) {
-    ##Plot Footprint and masks for checking
-    for (i in 1:length(masks_emed)) {
-      mask_df <- fortify(get(masks_emed[[i]]))
-      mask_df <- data.frame(x = mask_df$long, y = mask_df$lat)
-      assign(masks_emed_df[[i]], mask_df)
-    }
-
-    # Plot footprint and masks
-    g <- plot_pressure(pressure_data, "max", plot = FALSE)
-    g <- g + geom_path(data = heel_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = midfoot_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = MTH_1_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = MTH_2_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = MTH_3_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = MTH_4_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = MTH_5_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = hallux_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = l_toes_mask_df, aes(x = x, y = y),
-                       colour = "red", size = 1)
-    g <- g + geom_path(data = chull_ex_df, aes(x = x, y = y),
-                       colour = "blue", size = 1)
-    g <- g + coord_fixed()
-    print(g)
-  }
-
-  # Return masks for analysis
   mask_list <- list(heel_mask = heel_mask_,
                     midfoot_mask = midfoot_mask_,
                     forefoot_mask = forefoot_mask_,
@@ -1533,6 +1495,23 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
                     MTH_3_mask = MTH_3_mask_,
                     MTH_4_mask = MTH_4_mask_,
                     MTH_5_mask = MTH_5_mask_)
+
+
+  # ===========================================================================
+
+  # Plot Footprint and masks if required
+  if (plot == TRUE) {
+    # make masks into df format
+    mask_df <- masks_2_df(mask_list)
+
+    # Plot footprint and masks
+    g <- plot_pressure(pressure_data, "max", plot = FALSE)
+    g <- g + geom_path(data = mask_df, aes(x = x, y = y, group = mask),
+                       color = "red", size = 1)
+    print(g)
+  }
+
+  # Return masks for analysis
   return(mask_list)
 }
 
@@ -2147,4 +2126,3 @@ masks_2_df <- function(masks) {
   return(df)
 }
 
-masks_2_df(masks)
