@@ -39,103 +39,10 @@ library(zoo)
 #'   \item time. Numeric value for time between measurements
 #'  }
 #' @examples
-#' pressure_data = load_emed("example_data/emed test.lst")
+#' pressure_data2 = load_emed("example_data/emed test.lst")
 #' @export
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
-  # test inputs
-  if(is.character(pressure_filepath) == FALSE)
-    stop("filepath needs to be a character string")
-  if (is.logical(rem_zeros) == FALSE)
-    stop("rem_zeros needs to be a logical value")
-
-  # Read unformatted emed data
-  pressure_raw <- readLines(pressure_filepath, warn = FALSE)
-
-  # get sensor size
-  sens_size_ln <- which(grepl("Sensor size", pressure_raw))[1]
-  sens_size <- str_extract_all(pressure_raw[sens_size_ln], "\\d+\\.\\d+")
-  sens_size <- as.numeric(unlist(sens_size))
-  if (str_detect(pressure_raw[sens_size_ln], "cm") == TRUE) {sens_size <- sens_size * 0.01}
-
-  # get capture frequency
-  time_line <- which(grepl("Time", pressure_raw))[1]
-  time_ln <- str_split(pressure_raw[time_line], "picture:")[[1]][2]
-  time <- as.numeric(unlist(str_extract_all(time_ln, "\\d+\\.\\d+")))
-  if (str_detect(time_ln, "ms") == TRUE) {time <- time / 1000}
-
-  # remove summary frames
-  ## determine position breaks
-  breaks <- grep("Page", pressure_raw)
-
-  ## frame types
-  frame_type <- pressure_raw[breaks + 8]
-
-  ## identify and remove any summary frames
-  MVP <- which(grepl("MVP", frame_type, fixed = TRUE))
-  MPP <- which(grepl("MPP", frame_type, fixed = TRUE))
-  if (length(MVP) == 0 && length(MPP) == 0) {
-    breaks <- breaks
-  } else {
-    breaks <- breaks[-c(MVP, MPP)]
-  }
-
-  # pressure frame dimensions
-  ## get z dimension
-  z_dim <- length(breaks)
-
-  ## make sample frame
-  frame1 <- pressure_raw[(breaks[1] + 11):(breaks[2] - 2)]
-  tc_frame1 <- textConnection(frame1)
-  frame1 <- read.table(tc_frame1, sep = "\t")
-  close(tc_frame1)
-
-  ## get x dimension (number of columns)
-  x_dim <- ncol(frame1) - 1 # -1 is to account for row number
-  if (str_detect(pressure_raw[breaks[1] +  10], "Force")) {x_dim = x_dim - 1}
-
-  ## y dimension (number of rows)
-  y_dim <- (breaks[2] - breaks[1]) - 12
-  if (str_detect(pressure_raw[breaks[2] - 2], "Force")) {y_dim = y_dim - 1}
-
-  # create pressure array
-  ## make empty array to hold data
-  pressure_array <- array(NA, dim = c(y_dim, x_dim, z_dim))
-
-  ## populate 3D array with pressure data
-  for (i in seq_along(breaks)) {
-    y <- pressure_raw[(breaks[i] + 11):(breaks[i] + 10 + y_dim)]
-    tc_y <- textConnection(y)
-    y <- read.table(tc_y, sep = "\t")
-    y <- y[, 2:(x_dim + 1)]
-    pressure_array[,, i] <- as.matrix(y)
-    close(tc_y)
-  }
-
-  # if required, remove zero columns and rows
-  if (rem_zeros == TRUE) {
-    # make max footprint
-    fp <- apply(simplify2array(pressure_array), 1:2, max)
-
-    # rows
-    rsums <- rowSums(fp)
-    minr <- min(which(rsums > 0))
-    maxr <- max(which(rsums > 0))
-
-    # columns
-    csums <- colSums(fp)
-    minc <- min(which(csums > 0))
-    maxc <- max(which(csums > 0))
-
-    # update pressure array
-    pressure_array <- pressure_array[minr:maxr, minc:maxc,]
-  }
-
-  # return emed data
-  return(list(pressure_array = pressure_array, sens_size = sens_size, time = time))
-}
-
-load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
   # Read unformatted emed data
   pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
@@ -160,7 +67,9 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
   frame_type <- pressure_raw[breaks + 8]
   MVP <- which(grepl("MVP", frame_type, fixed = TRUE))
   MPP <- which(grepl("MPP", frame_type, fixed = TRUE))
-  breaks <- breaks[1:(min(c(MVP, MPP)) - 1)]
+  if (length(MVP) > 0 | length(MPP) > 0) {
+    breaks <- breaks[1:(min(c(MVP, MPP)) - 1)]
+  }
 
   # get blank lines
   ends <- which(pressure_raw == "\x0C")
@@ -176,13 +85,18 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
   for (i in 1:n_meas) {
     for (j in 1:nfs) {
       # start line
-      str <- (nfs * i) - 6 + j
+      str <- (nfs * i) - nfs + j
 
       # load as table
       y <- pressure_raw[(breaks[str] + 10):(ends[which(ends > breaks[str])[1]] - 2)]
       num_col <- unlist(str_split(y[1], "\\s+"))
       wids <- rep(8, times = length(num_col))
-      z <- read.fwf(textConnection(y), widths = wids)
+      if (nfs > 1) {
+        z <- read.fwf(textConnection(y), widths = wids)
+      } else {
+        z <- read.table(textConnection(y), sep = "\t")
+      }
+
       colnames(z) <- unname(z[1, ])
       z <- z[2:nrow(z), ]
 
@@ -201,7 +115,7 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
       # row numbers
       rn <- unname(unlist((z[, 1])))
       z <- as.matrix(z[, 2:ncol(z)])
-      z <- matrix(as.numeric(z, ncol = ncol(z)))
+      z <- matrix(as.numeric(z), ncol = ncol(z))
 
       # add to array
       pressure_array[rn, cn, i] <- z
@@ -228,7 +142,8 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
   }
 
   # return emed data
-  return(list(pressure_array = pressure_array, sens_size = sens_size,
+  return(list(pressure_array = pressure_array, pressure_system = "emed",
+              sens_size = sens_size,
               time = time))
 }
 
@@ -237,8 +152,35 @@ load_emed2 <- function(pressure_filepath, rem_zeros = TRUE) {
 
 
 load_pedar <- function(pressure_filepath) {
+  # Identify data type
+  d_type <- readLines(x, n = 1)
 
+  # Convert to 2 data frames LEFT and RIGHT
+  x_df <- as.data.frame(read.table(x, sep = "",
+                                   skip = 10, header = FALSE))
+  x_df <- tbl_df(x_df)
+  x_df_R <- x_df[ , c(1, 101:199)]
+  x_df_L <- x_df[ , c(1:100)]
+
+  # Get capture frequency
+  cap_freq <- 1 / (x_df_R[2, 1] - x_df_R[1, 1])
+
+  # Read in required pedar sensor areas
+  # Identify insole
+  pedar_insole_type <- readLines(x, n = 2)
+  pedar_insole_type <- pedar_insole_type[2]
+  it_id1 <- regexpr("-", pedar_insole_type)
+  it_id2 <- regexpr(":", pedar_insole_type)
+  pedar_insole_type <- substr(pedar_insole_type, it_id2[1] + 3, it_id1[1] - 1)
+  insoles <- c("u", "v", "w", "x", "y", "uw", "xw", "vw")
+  pedar_insole_type <- which(insoles == pedar_insole_type)
+
+  # return
+  return(list(pressure_array = pressure_array, pressure_system = "pedar",
+              sens_size = pedar_insole_type,
+              time = cap_freq))
 }
+
 
 # =============================================================================
 
@@ -1003,57 +945,6 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 
 automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
   # Helper functions
-  getMinBBox <- function(xy) {
-    stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
-
-    ## rotating calipers algorithm using the convex hull
-    H    <- chull(xy)                    # hull indices, vertices ordered clockwise
-    n    <- length(H)                    # number of hull vertices
-    hull <- xy[H, ]                      # hull vertices
-
-    ## unit basis vectors for all subspaces spanned by the hull edges
-    hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
-    hLens <- sqrt(rowSums(hDir^2))       # length of basis vectors
-    huDir <- diag(1/hLens) %*% hDir      # scaled to unit length
-
-    ## unit basis vectors for the orthogonal subspaces
-    ## rotation by 90 deg -> y' = x, x' = -y
-    ouDir <- cbind(-huDir[ , 2], huDir[ , 1])
-
-    ## project hull vertices on the subspaces spanned by the hull edges, and on
-    ## the subspaces spanned by their orthogonal complements - in subspace coords
-    projMat <- rbind(huDir, ouDir) %*% t(hull)
-
-    ## range of projections and corresponding width/height of bounding rectangle
-    rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
-    rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
-    widths  <- numeric(n)
-    heights <- numeric(n)
-    for(i in seq(along=H)) {
-      rangeH[i, ] <- range(projMat[  i, ])
-      rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
-      widths[i]   <- abs(diff(rangeH[i, ]))
-      heights[i]  <- abs(diff(rangeO[i, ]))
-    }
-
-    ## extreme projections for min-area rect in subspace coordinates
-    eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
-    hProj <- rbind(   rangeH[eMin, ], 0)
-    oProj <- rbind(0, rangeO[eMin, ])
-
-    ## move projections to rectangle corners
-    hPts <- sweep(hProj, 1, oProj[ , 1], "+")
-    oPts <- sweep(hProj, 1, oProj[ , 2], "+")
-
-    ## corners in standard coordinates, rows = x,y, columns = corners
-    ## in combined (4x2)-matrix: reverse point order to be usable in polygon()
-    basis <- cbind(huDir[eMin, ], ouDir[eMin, ])  # basis formed by hull edge and orth
-    hCorn <- basis %*% hPts
-    oCorn <- basis %*% oPts
-    pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
-
-    return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
-  } #Finds minimum bounding box
   vector_to_polygon <- function(x) {
     xa <- c()
     for (i in 1:((length(x)) / 2)) {
@@ -1688,7 +1579,7 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
 
 # =============================================================================
 
-#' Manually define orthoganal area
+#' Manually define orthogonal area
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -2181,4 +2072,59 @@ gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
 
 
 # =============================================================================
+# =============================================================================
 
+# helper functions
+
+#' @param xy Matrix. n row by 2 column with x-y coords of points to be bounded
+getMinBBox <- function(xy) {
+  stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
+
+  ## rotating calipers algorithm using the convex hull
+  H    <- chull(xy)                    # hull indices, vertices ordered clockwise
+  n    <- length(H)                    # number of hull vertices
+  hull <- xy[H, ]                      # hull vertices
+
+  ## unit basis vectors for all subspaces spanned by the hull edges
+  hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
+  hLens <- sqrt(rowSums(hDir^2))       # length of basis vectors
+  huDir <- diag(1/hLens) %*% hDir      # scaled to unit length
+
+  ## unit basis vectors for the orthogonal subspaces
+  ## rotation by 90 deg -> y' = x, x' = -y
+  ouDir <- cbind(-huDir[ , 2], huDir[ , 1])
+
+  ## project hull vertices on the subspaces spanned by the hull edges, and on
+  ## the subspaces spanned by their orthogonal complements - in subspace coords
+  projMat <- rbind(huDir, ouDir) %*% t(hull)
+
+  ## range of projections and corresponding width/height of bounding rectangle
+  rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
+  rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
+  widths  <- numeric(n)
+  heights <- numeric(n)
+  for(i in seq(along=H)) {
+    rangeH[i, ] <- range(projMat[  i, ])
+    rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
+    widths[i]   <- abs(diff(rangeH[i, ]))
+    heights[i]  <- abs(diff(rangeO[i, ]))
+  }
+
+  ## extreme projections for min-area rect in subspace coordinates
+  eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
+  hProj <- rbind(   rangeH[eMin, ], 0)
+  oProj <- rbind(0, rangeO[eMin, ])
+
+  ## move projections to rectangle corners
+  hPts <- sweep(hProj, 1, oProj[ , 1], "+")
+  oPts <- sweep(hProj, 1, oProj[ , 2], "+")
+
+  ## corners in standard coordinates, rows = x,y, columns = corners
+  ## in combined (4x2)-matrix: reverse point order to be usable in polygon()
+  basis <- cbind(huDir[eMin, ], ouDir[eMin, ])  # basis formed by hull edge and orth
+  hCorn <- basis %*% hPts
+  oCorn <- basis %*% oPts
+  pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
+
+  return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
+}
