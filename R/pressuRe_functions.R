@@ -2,13 +2,15 @@
 # add input tests to throw errors
 # pti to pressure curve function
 # plot_pressure option to choose different colors
-# pedar import
 # fscan import
-# combine load emed functions (use row col numbers)
 # output variables...
 # edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # allow for multiple masking schemes
+# change footprint function name to more generic name?
+# add buffer to outline plot
+# select_region needs to be updated, change name to create mask
+# create_mask and edit_mask need to work interactively how to check for cran
 
 
 
@@ -23,7 +25,7 @@ library(zoo)
 
 # =============================================================================
 
-#' @title Load_emed
+#' @title Load emed data
 #' @description Imports and formats .lst files collected on emed system and
 #'    exported from Novel software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
@@ -34,11 +36,13 @@ library(zoo)
 #' \itemize{
 #'   \item pressure_array. A 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
+#'   \item pressure_system. String with the name of the system the data was
+#'            collected on
 #'   \item sens_size. Numeric vector with dimensions of the sensors (m)
 #'   \item time. Numeric value for time between measurements
 #'  }
 #' @examples
-#' pressure_data2 = load_emed("example_data/emed test.lst")
+#' pressure_data = load_emed("example_data/emed test.lst")
 #' @export
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
@@ -149,41 +153,62 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 
 # =============================================================================
 
-
+#' @title Load pedar data
+#' @description Imports and formats .asc files collected on pedar system and
+#'    exported from Novel software
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_filepath String. Filepath pointing to emed pressure file
+#' @return A list with information about the pressure data.
+#' \itemize{
+#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item pressure_system. String with the name of the system the data was
+#'            collected on
+#'   \item sens_size. Numeric vector with dimensions of the sensors (m), or
+#'            string with name of insole size
+#'   \item time. Numeric value for time between measurements
+#'  }
+#' @examples
+#' pressure_data = load_pedar("example_data/pedar_example.asc")
+#' @export
 load_pedar <- function(pressure_filepath) {
-  # Identify data type
-  d_type <- readLines(x, n = 1)
+  # measurement data
+  ## header
+  header <- readLines(pressure_filepath, n = 3)
 
-  # Convert to 2 data frames LEFT and RIGHT
-  x_df <- as.data.frame(read.table(x, sep = "",
-                                   skip = 10, header = FALSE))
-  x_df <- tbl_df(x_df)
-  x_df_R <- x_df[ , c(1, 101:199)]
-  x_df_L <- x_df[ , c(1:100)]
-
-  # Get capture frequency
-  cap_freq <- 1 / (x_df_R[2, 1] - x_df_R[1, 1])
-
-  # Read in required pedar sensor areas
   # Identify insole
-  pedar_insole_type <- readLines(x, n = 2)
-  pedar_insole_type <- pedar_insole_type[2]
-  it_id1 <- regexpr("-", pedar_insole_type)
-  it_id2 <- regexpr(":", pedar_insole_type)
-  pedar_insole_type <- substr(pedar_insole_type, it_id2[1] + 3, it_id1[1] - 1)
-  insoles <- c("u", "v", "w", "x", "y", "uw", "xw", "vw")
-  pedar_insole_type <- which(insoles == pedar_insole_type)
+  insole_type_ln <- str_split(header[2], "\\:")[[1]][2]
+  insole_type <- str_split(insole_type_ln, "\\-")[[1]][1]
+  insole_type <- str_trim(insole_type)[[1]][1]
+
+  # Get time between measurements
+  time_ln <- str_split(header[3], "\\[Hz\\]\\:")[[1]][2]
+  time <- 1 / as.numeric(time_ln)
+
+  # import data
+  pressure_data <- as.data.frame(read.table(pressure_filepath,
+                                            sep = "", skip = 10,
+                                            header = FALSE))
+
+  # make into 2 (left and right insole) x 99 (sensors) x time array
+  pressure_array <- array(0, dim = c(2, 99, nrow(pressure_data)))
+  for (i in 1:nrow(pressure_data)) {
+    pressure_array[1, , i] <- unlist(unname(pressure_data[i, c(101:199)]))
+    pressure_array[2, , i] <- unlist(unname(pressure_data[i, c(2:100)]))
+  }
 
   # return
   return(list(pressure_array = pressure_array, pressure_system = "pedar",
               sens_size = pedar_insole_type,
-              time = cap_freq))
+              time = time))
 }
 
 
 # =============================================================================
 
-#' Load fscan data
+#' @title Load F-scan data
+#' @description Imports and formats .asc files collected on pedar system and
+#'    exported from Tekscan software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
@@ -200,7 +225,8 @@ load_fscan <- function(pressure_filepath) {
 
 # =============================================================================
 
-#' Load tekscan i-scan data
+#' @title Load tekscan i-scan data
+#' @description
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @param sensor_type String. Currently only "6900" supported
@@ -247,7 +273,9 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 
 # =============================================================================
 
-#' Interpolate pressure data. Useful for normalizing to stance phase, for example
+#' @title Interpolate pressure data
+#' @description Interpolates data over time. Useful for normalizing to stance
+#' phase, for example
 #' @author Scott Telfer
 #' \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
@@ -306,7 +334,8 @@ pressure_interp <- function(pressure_data, interp_to) {
 
 # =============================================================================
 
-#' Detects which foot plantar pressure data is from (left or right). Not 100%
+#' @title Detect foot side
+#' @Description Detects which foot plantar pressure data is from (left or right). Not 100%
 #' reliable...
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
@@ -396,14 +425,15 @@ auto_detect_side <- function(pressure_data) {
 
 # =============================================================================
 
-#' Generate force curve with option to plot
+#' @title Force curve
+#' @description Generates force vector with option to plot
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' force_curve(pressure_data, plot = TRUE)
+#' force_data(pressure_data, plot = TRUE)
 
 force_curve <- function(pressure_data, plot = FALSE) {
   # check input
@@ -444,7 +474,8 @@ force_curve <- function(pressure_data, plot = FALSE) {
 
 # =============================================================================
 
-#' Generate pressure curve with option to plot
+#' @title Pressure curve
+#' @description Generate pressure curve with option to plot
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
@@ -501,7 +532,8 @@ pressure_curve <- function(pressure_frames, variable = "peak",
 
 # =============================================================================
 
-#' Generate contact area curve with option to plot
+#' @title Contact area curve
+#' @description Generate contact area curve with option to plot
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
@@ -554,7 +586,8 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 
 # =============================================================================
 
-#' Generate center of pressure coordinates
+#' @title Center of pressure
+#' @description Generates center of pressure coordinates
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
@@ -572,7 +605,7 @@ cop <- function(pressure_data) {
   dims <- dim(x)
 
   # individual sensor dimensions
-  sens_dim <- pressure_data[[2]]
+  sens_dim <- pressure_data[[3]]
 
   # loading totals by column
   col_total <- data.frame(matrix(NA, nrow = dims[2], ncol = dims[3]))
@@ -614,7 +647,8 @@ cop <- function(pressure_data) {
 
 # =============================================================================
 
-#' Find footprint of pressure file
+#' @title Footprint
+#' @description Find footprint of pressure file
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -660,7 +694,8 @@ footprint <- function(pressure_data, variable = "max", frame,
 
 # =============================================================================
 
-#' Produce plot of pressure data
+#' @title Plot pressure
+#' @description Produce plot of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -782,6 +817,10 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @return Data frame. x and y coordinators of convex hull outline
 
 pressure_outline <- function(pressure_data) {
+  # check that this is not pedar data
+  if (pressure_data[[2]] == "pedar")
+    stop("data cannot be from pedar")
+
   # determine active sensor coordinates
   sens_coords <- sensor_coords(pressure_data, active = TRUE)
 
@@ -790,6 +829,8 @@ pressure_outline <- function(pressure_data) {
   outline_sens_coords <- sens_coords[outline_sens, ]
   outline_sens_coords <- rbind(outline_sens_coords, outline_sens_coords[1, ])
 
+  # add buffer here
+
   # return convex hull coordinates
   return(outline_sens_coords)
 }
@@ -797,7 +838,8 @@ pressure_outline <- function(pressure_data) {
 
 # =============================================================================
 
-#' Produce animation (gif) of pressure distribution
+#' @title Animate pressure
+#' @description Produce animation (gif) of pressure distribution
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -892,7 +934,8 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 
 # =============================================================================
 
-#' Automatically create mask of footprint
+#' @title automask footprint
+#' @description Automatically create mask of footprint data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
@@ -1519,19 +1562,19 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
 
 # =============================================================================
 
-#' Manually define orthogonal area
+#' @title Create mask
+#' @description Manually create mask region
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data Array. A 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement.
 #' @param image_value String. "max" = footprint of maximum sensors. "mean"
 #'   average value of sensors over time (usually for static analyses)
 #' @return Array. A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
 
-select_region <- function(pressure_frames, image_value = "max",
-                          sens_x = 0.005, sens_y = 0.005) {
+create_mask <- function(pressure_data, image = c()) {
   # plot footprint
-  g <- plot_footprint(pressure_frames)
+  g <- plot_footprint(pressure_data[[1]])
   print(g)
 
   # interactively select area
@@ -1569,10 +1612,26 @@ select_region <- function(pressure_frames, image_value = "max",
 
 # =============================================================================
 
-#' Determine Center of Pressure Excursion Index (CPEI)
+#' @title Edit mask
+#' @description Manually edit mask
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_frames Array. A 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement.
+#' @return
+#' @example
+
+edit_mask <- function(pressure_data) {
+
+}
+
+# =============================================================================
+
+#' @title CPEI
+#' @description Determine Center of Pressure Excursion Index (CPEI) for
+#' footprint pressure data
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_frames List. First item is a 3D array covering each timepoint
+#' of the measurement.
 #' @param side String. "right" or "left". Required for automatic detection of
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
@@ -1711,7 +1770,7 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
     cop_end <- manually_select(1, "select the most medial point near the end of the COP")
   }
 
-  if(auto_worked == "c") {
+  if (auto_worked == "c") {
     # plot footprint
     g <- plot_footprint(pressure_frames, plot_COP = TRUE, plot_outline = TRUE)
 
@@ -1720,8 +1779,8 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
     end_point <- manually_select(1, "select the most medial point near the end of the COP")
   }
 
-  ## Calculate CPEI
-  # determine foot length
+  # Calculate CPEI
+  ## determine foot length
   heel_intersect <- perp_intersect(m_bor, heel_coord)
   toe_intersect <- perp_intersect(m_bor, toe_coord)
   foot_length <- dist(rbind(heel_intersect, toe_intersect))
