@@ -27,10 +27,10 @@
 # =============================================================================
 
 # Packages required
-library(tidyverse)
-library(sf)
-library(rgeos)
-library(zoo)
+#library(tidyverse)
+#library(sf)
+#library(rgeos)
+#library(zoo)
 
 
 # =============================================================================
@@ -52,7 +52,7 @@ library(zoo)
 #'   \item time. Numeric value for time between measurements
 #'  }
 #' @examples
-#' pressure_data = load_emed("example_data/emed test.lst")
+#' pressure_data = load_emed("inst/extdata/emed_test.lst")
 #' @export
 
 load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
@@ -179,7 +179,7 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 #'   \item time. Numeric value for time between measurements
 #'  }
 #' @examples
-#' pressure_data = load_pedar("example_data/pedar_example.asc")
+#' pressure_data = load_pedar("inst/extdata/pedar_example.asc")
 #' @export
 load_pedar <- function(pressure_filepath) {
   # measurement data
@@ -298,7 +298,7 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #' @examples
-#' pressure_interp(pressure_data, 101)
+#' pressure_interp(pressure_data, interp_to = 101)
 
 pressure_interp <- function(pressure_data, interp_to) {
   # check inputs
@@ -767,7 +767,7 @@ auto_detect_side <- function(pressure_data) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' force_data(pressure_data, plot = TRUE)
+#' force_curve(pressure_data, plot = TRUE)
 
 force_curve <- function(pressure_data, plot = FALSE) {
   # check input
@@ -775,7 +775,7 @@ force_curve <- function(pressure_data, plot = FALSE) {
     stop("pressure_frames input must contain an array")
 
   # convert to force
-  sens_area <- pressure_data[[2]][1] * pressure_data[[2]][2]
+  sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
   force_array <- pressure_data[[1]] * sens_area * 1000
 
   # create empty vector
