@@ -13,7 +13,7 @@
 # create_mask and edit_mask need to work interactively how to check for cran
 # add pedar select steps
 # make pedar sensor areas RData
-# force curce (and others) to work with insole data
+# force curve (and others) to work with insole data
 
 # data list:
 ## pressure data. Array
