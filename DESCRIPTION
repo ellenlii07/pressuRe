@@ -1,11 +1,13 @@
 Package: pressuRe
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Imports, processes, and visualizes biomechanical pressure data
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Author@R: person("Scott", "Telfer", , "scott.telfer@gmail.com", 
+                 role = c("aut", "cre"), 
+                 comment = c(ORCID = "0000-0002-0104-4027"))
+Description: Allows biomechanical pressure data from a range of systems to be 
+    imported and processed in a repeatable manner. Also includes functions for 
+    visualizing and animating data.
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
