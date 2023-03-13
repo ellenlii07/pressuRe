@@ -19,7 +19,8 @@ Array. A 3D array covering each timepoint of the measurement. z
   dimension represents time
 }
 \description{
-Load tekscan i-scan data
+Imports and formats .asc files collected on i-scan system and
+   exported from Tekscan software
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

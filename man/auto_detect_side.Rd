@@ -14,7 +14,8 @@ timepoint of the measurement. z dimension represents time}
 String. "LEFT" or "RIGHT"
 }
 \description{
-Detect foot side
+Detects which foot plantar pressure data is from (left or
+right). Not 100% reliable...
 }
 \examples{
 auto_detect_side(pressure_data)

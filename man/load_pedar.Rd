@@ -26,7 +26,7 @@ Imports and formats .asc files collected on pedar system and
    exported from Novel software
 }
 \examples{
-pressure_data = load_pedar("example_data/pedar_example.asc")
+pressure_data = load_pedar("inst/extdata/pedar_example.asc")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

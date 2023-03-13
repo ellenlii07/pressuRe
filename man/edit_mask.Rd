@@ -10,8 +10,14 @@ edit_mask(pressure_data)
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
 }
+\value{
+List.
+}
 \description{
 Manually edit mask
+}
+\examples{
+edit_mask(pressure_data)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

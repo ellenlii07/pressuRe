@@ -19,7 +19,7 @@ Numeric vector containing force values
 Generates force vector with option to plot
 }
 \examples{
-force_data(pressure_data, plot = TRUE)
+force_curve(pressure_data, plot = TRUE)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

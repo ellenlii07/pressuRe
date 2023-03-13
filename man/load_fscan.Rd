@@ -19,7 +19,7 @@ A list with information about the pressure data.
  }
 }
 \description{
-Imports and formats .asc files collected on pedar system and
+Imports and formats .asc files collected on f-scan system and
    exported from Tekscan software
 }
 \author{

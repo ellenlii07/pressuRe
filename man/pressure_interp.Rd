@@ -13,14 +13,19 @@ timepoint of the measurement. z dimension represents time.}
 \item{interp_to}{Number of frames to interpolate to}
 }
 \value{
-
+\itemize{
+  \item pressure_array. 3D array covering each timepoint of the measurement.
+           z dimension represents time
+  \item sens_size. Numeric vector with the dimensions of the sensors
+  \item time. Numeric value for time between measurements
+  }
 }
 \description{
 Interpolates data over time. Useful for normalizing to stance
 phase, for example
 }
 \examples{
-pressure_interp(pressure_data, 101)
+pressure_interp(pressure_data, interp_to = 101)
 }
 \author{
 Scott Telfer

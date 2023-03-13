@@ -217,7 +217,7 @@ load_pedar <- function(pressure_filepath) {
 # =============================================================================
 
 #' @title Load F-scan data
-#' @description Imports and formats .asc files collected on pedar system and
+#' @description Imports and formats .asc files collected on f-scan system and
 #'    exported from Tekscan software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
@@ -236,7 +236,8 @@ load_fscan <- function(pressure_filepath) {
 # =============================================================================
 
 #' @title Load tekscan i-scan data
-#' @description
+#' @description Imports and formats .asc files collected on i-scan system and
+#'    exported from Tekscan software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @param sensor_type String. Currently only "6900" supported
@@ -297,6 +298,7 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #'            z dimension represents time
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
+#'   }
 #' @examples
 #' pressure_interp(pressure_data, interp_to = 101)
 
@@ -309,11 +311,11 @@ pressure_interp <- function(pressure_data, interp_to) {
 
   # make new empty array
   dims <- dim(pressure_data[[1]])
-  interp_array <- array(NA, dim = c(dims[1]), dims[2], interp_to)
+  interp_array <- array(NA, dim = c(dims[1], dims[2], interp_to))
 
   # interpolation function
   approxP <- function(x, interp_to) {
-    y <- approx(x, n = as.numeric(interp_to))
+    y <- approx(x, n = interp_to)
     y$x <- NULL
     y <- unname(unlist(y))
     return(y)
@@ -361,6 +363,7 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
 #'   \item events. List
+#'   }
 #' @examples
 #' select_steps
 #' @export
@@ -669,8 +672,8 @@ select_steps <- function (pressure_data, threshold_R = 20,
 # =============================================================================
 
 #' @title Detect foot side
-#' @Description Detects which foot plantar pressure data is from (left or right). Not 100%
-#' reliable...
+#' @description Detects which foot plantar pressure data is from (left or
+#' right). Not 100% reliable...
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
@@ -992,7 +995,7 @@ cop <- function(pressure_data) {
 #' @param frame Integer. Only used if variable = "frame".
 #' @param plot Logical. Display pressure image
 #' @return Matrix. Maximum or mean values for all sensors
-#' @example
+#' @examples
 #' footprint(pressure_data, plot = TRUE)
 
 footprint <- function(pressure_data, variable = "max", frame,
@@ -1951,8 +1954,9 @@ create_mask <- function(pressure_data, image = c()) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
-#' @return
-#' @example
+#' @return List.
+#' @examples
+#' edit_mask(pressure_data)
 
 edit_mask <- function(pressure_data) {
 
@@ -2185,7 +2189,7 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 #'  "peak_sensor_ts", "peak_mask", "peak_mask_ts", "mean_mask",
 #'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2", force_peak",
 #'  "force_ts"
-#' @return
+#' @return Data frame.
 #' @examples
 #'  mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 

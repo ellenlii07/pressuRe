@@ -24,6 +24,9 @@ Matrix. Maximum or mean values for all sensors
 \description{
 Find footprint of pressure file
 }
+\examples{
+footprint(pressure_data, plot = TRUE)
+}
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
 }

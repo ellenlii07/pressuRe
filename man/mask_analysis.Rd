@@ -27,6 +27,9 @@ proportion of the sensor that falls within the mask border}
 
 \item{masks.}{List. Masks used to define the regions to be analysed}
 }
+\value{
+Data frame.
+}
 \description{
 Analyze masked regions of pressure data
 }
