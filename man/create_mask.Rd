@@ -4,17 +4,17 @@
 \alias{create_mask}
 \title{Create mask}
 \usage{
-create_mask(pressure_data, image = c())
+create_mask(pressure_data, image = "max")
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
 
-\item{image_value}{String. "max" = footprint of maximum sensors. "mean"
+\item{image}{String. "max" = footprint of maximum sensors. "mean"
 average value of sensors over time (usually for static analyses)}
 }
 \value{
-Array. A 3D array covering each timepoint of the measurement for the
+List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
   selected region. z dimension represents time
 }
 \description{

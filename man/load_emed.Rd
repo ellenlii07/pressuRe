@@ -4,23 +4,21 @@
 \alias{load_emed}
 \title{Load emed data}
 \usage{
-load_emed(pressure_filepath, rem_zeros = TRUE)
+load_emed(pressure_filepath)
 }
 \arguments{
 \item{pressure_filepath}{String. Filepath pointing to emed pressure file}
-
-\item{rem_zeros}{Logical. If TRUE, remove columns and rows from edges which
-contain only zeros}
 }
 \value{
 A list with information about the pressure data.
 \itemize{
-  \item pressure_array. A 3D array covering each timepoint of the measurement.
+  \item pressure_array. 3D array covering each timepoint of the measurement.
            z dimension represents time
-  \item pressure_system. String with the name of the system the data was
-           collected on
-  \item sens_size. Numeric vector with dimensions of the sensors (m)
+  \item pressure_system. Character defining pressure system
+  \item sens_size. Numeric vector with the dimensions of the sensors
   \item time. Numeric value for time between measurements
+  \item masks. List
+  \item events. List
  }
 }
 \description{

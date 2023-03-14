@@ -12,11 +12,18 @@ load_fscan(pressure_filepath)
 \value{
 A list with information about the pressure data.
 \itemize{
-  \item pressure_array. A 3D array covering each timepoint of the measurement.
+  \item pressure_array. 3D array covering each timepoint of the measurement.
            z dimension represents time
-  \item sens_size. Numeric vector with two values for the dimensions of the sensors
+  \item pressure_system. Character defining pressure system
+  \item sens_size. Numeric vector with the dimensions of the sensors
   \item time. Numeric value for time between measurements
+  \item masks. List
+  \item events. List
  }
+ @examples
+ pressure_data <- load_fscan("inst/extdata/)
+ @importFrom
+ @export
 }
 \description{
 Imports and formats .asc files collected on f-scan system and

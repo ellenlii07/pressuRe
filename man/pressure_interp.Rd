@@ -10,15 +10,18 @@ pressure_interp(pressure_data, interp_to)
 \item{pressure_data}{List. First item should be a 3D array covering each
 timepoint of the measurement. z dimension represents time.}
 
-\item{interp_to}{Number of frames to interpolate to}
+\item{interp_to}{Integer. Number of frames to interpolate to}
 }
 \value{
 \itemize{
   \item pressure_array. 3D array covering each timepoint of the measurement.
            z dimension represents time
+  \item pressure_system. Character defining pressure system
   \item sens_size. Numeric vector with the dimensions of the sensors
   \item time. Numeric value for time between measurements
-  }
+  \item masks. List
+  \item events. List
+ }
 }
 \description{
 Interpolates data over time. Useful for normalizing to stance

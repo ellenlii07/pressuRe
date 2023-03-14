@@ -56,7 +56,7 @@
 #'  }
 #' @examples
 #' pressure_data = load_emed("inst/extdata/emed_test.lst")
-#' @importfrom Stringr str_extract_all str_detect
+#' @importFrom stringr str_extract_all str_detect
 #' @export
 
 load_emed <- function(pressure_filepath) {
@@ -191,7 +191,7 @@ load_emed <- function(pressure_filepath) {
 #'  }
 #' @examples
 #' pressure_data = load_pedar("inst/extdata/pedar_example.asc")
-#' @importFrom Stringr str_split str_trim
+#' @importFrom stringr str_split str_trim
 #' @export
 
 load_pedar <- function(pressure_filepath) {
@@ -284,7 +284,7 @@ load_fscan <- function(pressure_filepath) {
 #'   dimension represents time
 #' @example
 #' pressure_data <- load_iscan
-#' @importFrom
+#' @importFrom stringr str_match_all
 #' @export
 load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
   # test inputs
@@ -1240,6 +1240,8 @@ pressure_outline <- function(pressure_data) {
 #' @return Animation in gif format
 #' @examples
 #' animate_pressure(pressure_data, fps = 10, "testgif.gif")
+#' @importFrom stringr str_ends
+#' @export
 
 animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
   # parameter check
