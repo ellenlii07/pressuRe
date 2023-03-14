@@ -2,7 +2,7 @@
 # add input tests to throw errors
 # pti to pressure curve function
 # plot_pressure option to choose different colors
-# fscan import
+# fscan import function
 # output variables...
 # edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
@@ -11,9 +11,13 @@
 # add buffer to outline plot
 # select_region needs to be updated, change name to create mask
 # create_mask and edit_mask need to work interactively how to check for cran
-# add pedar select steps
-# make pedar sensor areas RData
+# select steps needs to be rewritten
+# make pedar sensor areas into RData files. Do we have all insoles? Double check areas
 # force curve (and others) to work with insole data
+# filepath to fscan example
+# can load-iscan be made more generic?
+# rewrite detect_side with sf package
+# can cop use sensor_coords to get coordinates?
 
 # data list:
 ## pressure data. Array
@@ -40,22 +44,31 @@
 #'    exported from Novel software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
-#' @param rem_zeros Logical. If TRUE, remove columns and rows from edges which
-#'   contain only zeros
 #' @return A list with information about the pressure data.
 #' \itemize{
-#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. String with the name of the system the data was
-#'            collected on
-#'   \item sens_size. Numeric vector with dimensions of the sensors (m)
+#'   \item pressure_system. Character defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
 #'  }
 #' @examples
 #' pressure_data = load_emed("inst/extdata/emed_test.lst")
+#' @importfrom Stringr str_extract_all str_detect
 #' @export
 
-load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
+load_emed <- function(pressure_filepath) {
+  # check parameters
+  ## file exists
+  if (file.exists(pressure_filepath) == FALSE)
+    stop("file does not exist")
+
+  ## extension is correct
+  if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "lst")
+    stop("incorrect file extension, expected .lst")
+
   # Read unformatted emed data
   pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
@@ -135,26 +148,24 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
     }
   }
 
-  # if required, remove zero columns and rows
-  if (rem_zeros == TRUE) {
-    # make max footprint
-    fp <- apply(simplify2array(pressure_array), 1:2, max)
+  # remove zero columns and rows
+  ## make max footprint
+  fp <- apply(simplify2array(pressure_array), 1:2, max)
 
-    # rows
-    rsums <- rowSums(fp)
-    minr <- min(which(rsums > 0))
-    maxr <- max(which(rsums > 0))
+  ## rows
+  rsums <- rowSums(fp)
+  minr <- min(which(rsums > 0))
+  maxr <- max(which(rsums > 0))
 
-    # columns
-    csums <- colSums(fp)
-    minc <- min(which(csums > 0))
-    maxc <- max(which(csums > 0))
+  ## columns
+  csums <- colSums(fp)
+  minc <- min(which(csums > 0))
+  maxc <- max(which(csums > 0))
 
-    # update pressure array
-    pressure_array <- pressure_array[minr:maxr, minc:maxc,]
-  }
+  ## update pressure array
+  pressure_array <- pressure_array[minr:maxr, minc:maxc,]
 
-  # return emed data
+  # return formatted emed data
   return(list(pressure_array = pressure_array, pressure_system = "emed",
               sens_size = sens_size,
               time = time))
@@ -170,18 +181,29 @@ load_emed <- function(pressure_filepath, rem_zeros = TRUE) {
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
-#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. String with the name of the system the data was
-#'            collected on
-#'   \item sens_size. Numeric vector with dimensions of the sensors (m), or
-#'            string with name of insole size
+#'   \item pressure_system. Character defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
 #'  }
 #' @examples
 #' pressure_data = load_pedar("inst/extdata/pedar_example.asc")
+#' @importFrom Stringr str_split str_trim
 #' @export
+
 load_pedar <- function(pressure_filepath) {
+  # check parameters
+  ## file exists
+  if (file.exists(pressure_filepath) == FALSE)
+    stop("file does not exist")
+
+  ## extension is correct
+  if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "asc")
+    stop("incorrect file extension, expected .asc")
+
   # measurement data
   ## header
   header <- readLines(pressure_filepath, n = 3)
@@ -223,13 +245,28 @@ load_pedar <- function(pressure_filepath) {
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
-#'   \item pressure_array. A 3D array covering each timepoint of the measurement.
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item sens_size. Numeric vector with two values for the dimensions of the sensors
+#'   \item pressure_system. Character defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
 #'  }
-load_fscan <- function(pressure_filepath) {
+#'  @examples
+#'  pressure_data <- load_fscan("inst/extdata/)
+#'  @importFrom
+#'  @export
 
+load_fscan <- function(pressure_filepath) {
+  # check parameters
+  ## file exists
+  if (file.exists(pressure_filepath) == FALSE)
+    stop("file does not exist")
+
+  ## extension is correct
+  if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "asf")
+    stop("incorrect file extension, expected .asf")
 }
 
 
@@ -245,6 +282,10 @@ load_fscan <- function(pressure_filepath) {
 #'   of interest
 #' @return Array. A 3D array covering each timepoint of the measurement. z
 #'   dimension represents time
+#' @example
+#' pressure_data <- load_iscan
+#' @importFrom
+#' @export
 load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
   # test inputs
   if(is.character(pressure_filepath) == FALSE)
@@ -291,14 +332,17 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #' \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time.
-#' @param interp_to Number of frames to interpolate to
+#' @param interp_to Integer. Number of frames to interpolate to
 #' @return
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
+#'   \item pressure_system. Character defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
-#'   }
+#'   \item masks. List
+#'   \item events. List
+#'  }
 #' @examples
 #' pressure_interp(pressure_data, interp_to = 101)
 
@@ -306,8 +350,8 @@ pressure_interp <- function(pressure_data, interp_to) {
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
-  if (is.numeric(interp_to) == FALSE)
-    stop("pressure_frames input must contain an array")
+  if (is.integer(interp_to) == FALSE)
+    stop("interp_to must be int")
 
   # make new empty array
   dims <- dim(pressure_data[[1]])
@@ -366,6 +410,7 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   }
 #' @examples
 #' select_steps
+#' @importFrom
 #' @export
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 2,
@@ -680,6 +725,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
 #' @return String. "LEFT" or "RIGHT"
 #' @examples
 #' auto_detect_side(pressure_data)
+#' @export
 
 auto_detect_side <- function(pressure_data) {
   # max pressure footprint
@@ -771,6 +817,8 @@ auto_detect_side <- function(pressure_data) {
 #' @return Numeric vector containing force values
 #' @examples
 #' force_curve(pressure_data, plot = TRUE)
+#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @export
 
 force_curve <- function(pressure_data, plot = FALSE) {
   # check input
@@ -821,6 +869,8 @@ force_curve <- function(pressure_data, plot = FALSE) {
 #' @return Numeric vector containing force values
 #' @examples
 #' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
+#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @export
 
 pressure_curve <- function(pressure_frames, variable = "peak",
                            plot = FALSE) {
@@ -879,6 +929,8 @@ pressure_curve <- function(pressure_frames, variable = "peak",
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples area_curve(pressure_data, plot = TRUE)
+#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @export
 
 area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
   # check input
@@ -931,6 +983,8 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 #' @return Data frame with x and y coordinates of COP throughout trial
 #' @examples
 #' cop(pressure_data)
+#'
+#' @export
 
 cop <- function(pressure_data) {
   # check input
@@ -1282,6 +1336,7 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' @return List. Contains polygon with each mask
 #' @examples
 #' automask(pressure_data, sens = 4, plot = TRUE)
+#' @export
 
 automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
   # Helper functions
@@ -1904,12 +1959,14 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
-#' @param image_value String. "max" = footprint of maximum sensors. "mean"
+#' @param image String. "max" = footprint of maximum sensors. "mean"
 #'   average value of sensors over time (usually for static analyses)
-#' @return Array. A 3D array covering each timepoint of the measurement for the
+#' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
+#' @importFrom
+#' @export
 
-create_mask <- function(pressure_data, image = c()) {
+create_mask <- function(pressure_data, image = "max") {
   # plot footprint
   g <- plot_footprint(pressure_data[[1]])
   print(g)
