@@ -718,92 +718,81 @@ select_steps <- function (pressure_data, threshold_R = 20,
 
 #' @title Detect foot side
 #' @description Detects which foot plantar pressure data is from (left or
-#' right). Not 100% reliable...
+#' right). Generally works but may be thrown off by severe deformities
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
 #' @return String. "LEFT" or "RIGHT"
 #' @examples
 #' auto_detect_side(pressure_data)
+#' @importFrom sf st_polygon st_as_sf st_convex_hull st_combine st_intersection st_area
 #' @export
 
 auto_detect_side <- function(pressure_data) {
   # max pressure footprint
   fp <- footprint(pressure_data)
   fp_coords <- sensor_coords(pressure_data)
-  P <- c(max_df)
-  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord,
-                      P = P)
+  P <- c(fp)
+  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord, P = P)
   sc_df <- sc_df[which(P >= 5), ]
   sc_df$P <- NULL
-  sc_df <- as.matrix(sc_df)
+  sc_mat <- as.matrix(sc_df)
 
   # Bounding box
-  mbb <- getMinBBox(sc_df)
+  mbb <- getMinBBox(sc_mat)
+  mbb_coords <- mbb$pts
 
-  # Which sides of BBox are shortest?
-  side1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
-                   (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
-  side2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
-                   (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
-  side3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
-                   (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
-  side4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
-                   (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
-  shortsides <- order(c(side1d, side2d, side3d, side4d))
-  shortsides <- shortsides[1:2]
-
-  # Make two long boxes
-  half1 <- c()
-  half2 <- c()
-  if (is.element(1, shortsides) == TRUE &
-      is.element(3, shortsides) == TRUE) {
-    mp1 <- c((mbb$pts[2,1] + mbb$pts[1,1]) / 2,
-             (mbb$pts[2,2] + mbb$pts[1,2]) / 2)
-    mp2 <- c((mbb$pts[4,1] + mbb$pts[3,1]) / 2,
-             (mbb$pts[4,2] + mbb$pts[3,2]) / 2)
-    half1 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
-               mbb$pts[2,1], mbb$pts[2,2], mbb$pts[3,1], mbb$pts[3,2])
-    half2 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
-               mbb$pts[4,1], mbb$pts[4,2], mbb$pts[1,1], mbb$pts[1,2])
-  } else if (is.element(2, shortsides) == TRUE &
-             is.element(4, shortsides) == TRUE) {
-    mp1 <- c((mbb$pts[3,1] + mbb$pts[2,1]) / 2,
-             (mbb$pts[3,2] + mbb$pts[2,2]) / 2)
-    mp2 <- c((mbb$pts[1,1] + mbb$pts[4,1]) / 2,
-             (mbb$pts[1,2] + mbb$pts[4,2]) / 2)
-    half1 <- c(mp1[1], mp1[2], mp2[1], mp2[2],
-               mbb$pts[1,1], mbb$pts[1,2], mbb$pts[2,1], mbb$pts[2,2])
-    half2 <- c(mp2[1], mp2[2], mp1[1], mp1[2],
-               mbb$pts[3,1], mbb$pts[3,2], mbb$pts[4,1], mbb$pts[4,2])
+  # Which sides of BBox are longest?
+  if (dist(mbb_coords[c(1, 2), ]) > dist(mbb_coords[c(2, 3), ])) {
+    side1 <- mbb_coords[c(1, 2), ]
+    side2 <- mbb_coords[c(3, 4), ]
+  } else {
+    side1 <- mbb_coords[c(2, 3), ]
+    side2 <- mbb_coords[c(4, 1), ]
   }
 
-  # find convex hull
-  chull_elements <- chull(x = sc_df$x, y = sc_df$y)
-  chull_polygon <- vector_to_polygon(as.vector(t(em_act[chull_elements, ])))
-  chull_df <- em_act[c(chull_elements, chull_elements[1]), ]
+  # order so lowest first
+  side1 <- side1[order(side1[, 2]), ]
+  side2 <- side2[order(side2[, 2]), ]
 
-  # Get intersecting area for each half
-  half1_p <- vector_to_polygon(half1)
-  half2_p <- vector_to_polygon(half2)
-  int_area_1 <- gArea(gIntersection(readWKT(chull_polygon),
-                                    readWKT(half1_p)))
-  int_area_2 <- gArea(gIntersection(readWKT(chull_polygon),
-                                    readWKT(half2_p)))
+  # which side is L/R
+  if (side1[1, 1] > side2[1, 1]) {
+    side1_ <- side1 # side1_ is right
+    side2_ <- side2
+  } else {
+    side1_ <- side2
+    side2_ <- side1
+  }
 
-  # figure out which side each half is and therefore foot
-  half1_x <- sum(half1[c(1, 3, 5, 7)])
-  half2_x <- sum(half2[c(1, 3, 5, 7)])
+  # get midpoints
+  midpoint_top <- (side1_[2, ] + side2_[2, ]) / 2
+  midpoint_bottom <- (side1_[1, ] + side2_[1, ]) / 2
 
-  if (int_area_1 > int_area_2 & half1_x < half2_x) {side = "RIGHT"}
-  if (int_area_1 > int_area_2 & half1_x > half2_x) {side = "LEFT"}
-  if (int_area_2 > int_area_1 & half2_x < half1_x) {side = "RIGHT"}
-  if (int_area_2 > int_area_1 & half2_x > half1_x) {side = "LEFT"}
+  # make lat and med box
+  side1_pts <- rbind(side1_, midpoint_top, midpoint_bottom, side1_[1, ])
+  side2_pts <- rbind(side2_, midpoint_top, midpoint_bottom, side2_[1, ])
+  box1 <- st_polygon(list(side1_pts))
+  box2 <- st_polygon(list(side2_pts))
+
+  # make chull
+  df.sf <- sc_df %>%
+    st_as_sf(coords = c( "x", "y" ))
+  fp_chull <- st_convex_hull(st_combine(df.sf))
+
+  # area in each half box
+  side1_count <- st_area(st_intersection(fp_chull, box1))
+  side2_count <- st_area(st_intersection(fp_chull, box2))
+
+  # side
+  if (side1_count < side2_count) {
+    side <- "RIGHT"
+  } else {
+    side <- "LEFT"
+  }
 
   # Return side
   return(side)
 }
-
 
 
 # =============================================================================
@@ -928,7 +917,8 @@ pressure_curve <- function(pressure_frames, variable = "peak",
 #' considered active
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
-#' @examples area_curve(pressure_data, plot = TRUE)
+#' @examples
+#' area_curve(pressure_data, plot = TRUE)
 #' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
 #' @export
 
@@ -1102,6 +1092,8 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @return ggplot plot object
 #' @examples
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
+#' @importFrom ggplot2 ggplot geom_raster
+#' @exports
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           plot_COP = FALSE, plot_outline = FALSE,
