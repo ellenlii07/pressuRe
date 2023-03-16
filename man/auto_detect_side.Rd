@@ -15,7 +15,8 @@ String. "LEFT" or "RIGHT"
 }
 \description{
 Detects which foot plantar pressure data is from (left or
-right). Generally works but may be thrown off by severe deformities
+right), usually would only be needed for pressure plate data. Generally
+seems to work but may be thrown off by severe deformities
 }
 \examples{
 auto_detect_side(pressure_data)

@@ -8,7 +8,7 @@
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # allow for multiple masking schemes
 # change footprint function name to more generic name?
-# add buffer to outline plot
+# makke outline sf based and add buffer
 # select_region needs to be updated, change name to create mask
 # create_mask and edit_mask need to work interactively how to check for cran
 # select steps needs to be rewritten
@@ -16,15 +16,15 @@
 # force curve (and others) to work with insole data
 # filepath to fscan example
 # can load-iscan be made more generic?
-# rewrite detect_side with sf package
 # can cop use sensor_coords to get coordinates?
+# add support for pliance
 
 # data list:
-## pressure data. Array
+## Array. pressure data
 ## Character string. data type (usually collection system, e.g. emed)
-## sens_size. sensor size
-## Single number time between
-## Mask list
+## Numeric. sens_size. sensor size
+## Numeric. Single number time between
+## List. Mask list
 ## events (for example, to define start/end of individual steps for insole data)
 
 
@@ -168,7 +168,7 @@ load_emed <- function(pressure_filepath) {
   # return formatted emed data
   return(list(pressure_array = pressure_array, pressure_system = "emed",
               sens_size = sens_size,
-              time = time))
+              time = time, masks = NULL, events = NULL))
 }
 
 
@@ -282,8 +282,8 @@ load_fscan <- function(pressure_filepath) {
 #'   of interest
 #' @return Array. A 3D array covering each timepoint of the measurement. z
 #'   dimension represents time
-#' @example
-#' pressure_data <- load_iscan
+#' @examples
+#' pressure_data <- load_iscan()
 #' @importFrom stringr str_match_all
 #' @export
 load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
@@ -345,25 +345,19 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #'  }
 #' @examples
 #' pressure_interp(pressure_data, interp_to = 101)
+#' @export
 
 pressure_interp <- function(pressure_data, interp_to) {
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
-  if (is.integer(interp_to) == FALSE)
-    stop("interp_to must be int")
+  if (is.numeric(interp_to) & interp_to < 2)
+    stop("interp_to must be a numeric value greater than 2")
+  interp_to <- round(interp_to)
 
   # make new empty array
   dims <- dim(pressure_data[[1]])
   interp_array <- array(NA, dim = c(dims[1], dims[2], interp_to))
-
-  # interpolation function
-  approxP <- function(x, interp_to) {
-    y <- approx(x, n = interp_to)
-    y$x <- NULL
-    y <- unname(unlist(y))
-    return(y)
-  }
 
   # interpolate array
   pressure_array <- pressure_data[[1]]
@@ -378,13 +372,12 @@ pressure_interp <- function(pressure_data, interp_to) {
   time_seq_int <- approxP(time_seq, interp_to)
   time_sample_int <- time_seq_int[2] - time_seq_int[1]
 
-  # prep output
-  pressure_data_int <- list(pressure_array = interp_array,
-                            sens_size = pressure_data[[2]],
-                            time = time_sample_int)
+  # update pressure data
+  pressure_data[[1]] <- interp_array
+  pressure_data[[4]] <- time_sample_int
 
   # return interpolated pressure data
-  return(interp_array)
+  return(pressure_data)
 }
 
 
@@ -718,7 +711,8 @@ select_steps <- function (pressure_data, threshold_R = 20,
 
 #' @title Detect foot side
 #' @description Detects which foot plantar pressure data is from (left or
-#' right). Generally works but may be thrown off by severe deformities
+#' right), usually would only be needed for pressure plate data. Generally
+#' seems to work but may be thrown off by severe deformities
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
@@ -830,7 +824,7 @@ force_curve <- function(pressure_data, plot = FALSE) {
   if (plot == TRUE) {
     # make df
     force_df <- data.frame(force = force,
-                           time = seq(0, by = pressure_data[[3]],
+                           time = seq(0, by = pressure_data[[4]],
                                       length.out = length(force)))
 
     # plot
@@ -1093,7 +1087,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @examples
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 #' @importFrom ggplot2 ggplot geom_raster
-#' @exports
+#' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           plot_COP = FALSE, plot_outline = FALSE,
@@ -1167,7 +1161,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # add COP?
   if (plot_COP == TRUE) {
-    cop_df <- gen_cop(pressure_data)
+    cop_df <- cop(pressure_data)
     g <- g + geom_point(data = cop_df, aes(x = x_coord, y = y_coord))
   }
 
@@ -1233,6 +1227,7 @@ pressure_outline <- function(pressure_data) {
 #' @examples
 #' animate_pressure(pressure_data, fps = 10, "testgif.gif")
 #' @importFrom stringr str_ends
+#' @importFrom magick image_animate image_write
 #' @export
 
 animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
@@ -2013,6 +2008,7 @@ edit_mask <- function(pressure_data) {
 
 }
 
+
 # =============================================================================
 
 #' @title CPEI
@@ -2433,6 +2429,14 @@ sensor_coords <- function(pressure_data, active = FALSE) {
 }
 
 
+#" interpolation function
+approxP <- function(x, interp_to) {
+  y <- approx(x, n = interp_to)
+  y$x <- NULL
+  y <- unname(unlist(y))
+  return(y)
+}
+
 #' gglocator
 #' @param n Integer. Number of points to select
 #' @return Data frame. x and y coordinates of selected point
@@ -2509,6 +2513,7 @@ gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
 }
 
 
+#' Get minimum bounding box (angle)
 #' @param xy Matrix. n row by 2 column with x-y coords of points to be bounded
 getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
