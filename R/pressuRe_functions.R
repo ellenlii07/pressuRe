@@ -1,15 +1,13 @@
 # to do
-# add input tests to throw errors
+# add more input tests to throw errors
 # pti to pressure curve function
-# plot_pressure option to choose different colors
+# option to choose different colors in plot_pressure
 # fscan import function
-# output variables...
+# more output variables need to be added to  mask analysis
 # edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # allow for multiple masking schemes
 # change footprint function name to more generic name?
-# makke outline sf based and add buffer
-# select_region needs to be updated, change name to create mask
 # create_mask and edit_mask need to work interactively how to check for cran
 # select steps needs to be rewritten
 # make pedar sensor areas into RData files. Do we have all insoles? Double check areas
@@ -18,6 +16,8 @@
 # can load-iscan be made more generic?
 # can cop use sensor_coords to get coordinates?
 # add support for pliance
+# edit mask needs to be written
+# global pressure_import function (leave for V2)
 
 # data list:
 ## Array. pressure data
@@ -31,8 +31,6 @@
 # =============================================================================
 
 # Packages required
-#library(tidyverse)
-#library(sf)
 #library(rgeos)
 #library(zoo)
 
@@ -286,6 +284,7 @@ load_fscan <- function(pressure_filepath) {
 #' pressure_data <- load_iscan()
 #' @importFrom stringr str_match_all
 #' @export
+
 load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
   # test inputs
   if(is.character(pressure_filepath) == FALSE)
@@ -405,6 +404,7 @@ pressure_interp <- function(pressure_data, interp_to) {
 #' select_steps
 #' @importFrom
 #' @export
+
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 2,
                           steps_Rn = 12, steps_Ln = 12) {
@@ -1187,29 +1187,47 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 # =============================================================================
 
+#' @title Get outline of pressure region
 #' Determine outline (convex hull) of pressure measurement
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @return Data frame. x and y coordinators of convex hull outline
+#' @param frame Integer. Frame number to use
+#' @return Polygon. sfg object representing convex hull outline
+#' @examples
+#' pressure_outline(pressure_data)
+#' pressure_outline(pressure_data, frame = 50)
+#' @importFrom magrittr "%>%"
+#' @importFrom sf st_as_sf st_convex_hull st_combine st_buffer
+#' @export
 
-pressure_outline <- function(pressure_data) {
+pressure_outline <- function(pressure_data, frame) {
+  # check inputs
+  if (is.array(pressure_data[[1]]) == FALSE)
+    stop("pressure data must contain array")
+
   # check that this is not pedar data
   if (pressure_data[[2]] == "pedar")
     stop("data cannot be from pedar")
 
   # determine active sensor coordinates
-  sens_coords <- sensor_coords(pressure_data, active = TRUE)
+  if (missing(frame) == TRUE) {
+    coords <- sensor_coords(pressure_data)
+  } else {
+    coords <- sensor_coords(pressure_data, "frame", frame)
+  }
 
   # calculate convex hull
-  outline_sens <- chull(sens_coords)
-  outline_sens_coords <- sens_coords[outline_sens, ]
-  outline_sens_coords <- rbind(outline_sens_coords, outline_sens_coords[1, ])
+  sens_coords_df <- coords %>%
+    st_as_sf(coords = c("x_coord", "y_coord"))
+  fp_chull <- st_convex_hull(st_combine(sens_coords_df))
 
   # add buffer here
+  buffer_size <- pressure_data[[3]][1] / 2
+  fp_chull_buffer <- st_buffer(fp_chull, buffer_size)
 
   # return convex hull coordinates
-  return(outline_sens_coords)
+  return(fp_chull_buffer)
 }
 
 
@@ -2393,43 +2411,57 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
 # helper functions
 
-#' Coordinates of active sensors
+#' @title Get coordinates of active sensors
+#' @description Produces a data frame with coordinates of sensors
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param active. Logical. Should the coordinates be limited to active sensors
+#' @param pressure_image. Character. Which pressure image to use. Options are
+#' "all_active", "all", or "frame".
+#' @param frame Numeric. If pressure image is frame, the numeric value should be
+#' provided here
 #' @return Data frame. x and y coordinates of sensors
 #' @examples
 #' sensor_coords(pressure_data)
+#' @noRd
 
-sensor_coords <- function(pressure_data, active = FALSE) {
-  # max pressure footprint
-  max_fp <- footprint(pressure_data)
+sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
+  # pressure image
+  if (pressure_image == "all_active") {
+    sens <- footprint(pressure_data, variable = "max")
+  }
+  if (pressure_image == "all") {
+    dims <- dim(pressure_data[[1]])
+    sens <- matrix(rep(10, length.out = dims[1] * dims[2]), nrow = dims[1],
+                   ncol = dims[2])
+  }
+  if (pressure_image == "frame") {
+    sens <- footprint(pressure_data, variable = "frame", frame = frame)
+  }
 
   # dimensions
   sens_x <- pressure_data[[3]][1]
   sens_y <- pressure_data[[3]][2]
 
   # data frame with active sensors as coordinates
-  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(max_fp))
-  x_cor <- rep(x_cor, each = nrow(max_fp))
-  y_cor <- seq(from = (sens_y / 2) + ((nrow(max_fp) - 1) * sens_y),
-               by = (-1 * sens_y), length.out = nrow(max_fp))
-  y_cor <- rep(y_cor, times = ncol(max_fp))
+  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(sens))
+  x_cor <- rep(x_cor, each = nrow(sens))
+  y_cor <- seq(from = (sens_y / 2) + ((nrow(sens) - 1) * sens_y),
+               by = (-1 * sens_y), length.out = nrow(sens))
+  y_cor <- rep(y_cor, times = ncol(sens))
   coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
 
-  # remove inactive sensors if required
-  if (active == TRUE) {
-    P <- c(max_fp)
-    coords <- coords[which(P > 0), ]
-  }
+  # remove inactive sensors
+  P <- c(sens)
+  coords <- coords[which(P > 0), ]
 
   # return sensor coordinates
   return(coords)
 }
 
 
-#" interpolation function
+#' interpolation function
+#' @importFrom stats approx
 approxP <- function(x, interp_to) {
   y <- approx(x, n = interp_to)
   y$x <- NULL

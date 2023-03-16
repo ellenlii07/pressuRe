@@ -2,19 +2,27 @@
 % Please edit documentation in R/pressuRe_functions.R
 \name{pressure_outline}
 \alias{pressure_outline}
-\title{Determine outline (convex hull) of pressure measurement}
+\title{Get outline of pressure region
+Determine outline (convex hull) of pressure measurement}
 \usage{
-pressure_outline(pressure_data)
+pressure_outline(pressure_data, frame)
 }
 \arguments{
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
 measurement. z dimension represents time}
+
+\item{frame}{Integer. Frame number to use}
 }
 \value{
-Data frame. x and y coordinators of convex hull outline
+Polygon. sfg object representing convex hull outline
 }
 \description{
+Get outline of pressure region
 Determine outline (convex hull) of pressure measurement
+}
+\examples{
+pressure_outline(pressure_data)
+pressure_outline(pressure_data, frame = 50)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

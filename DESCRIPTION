@@ -15,5 +15,6 @@ RoxygenNote: 7.2.3
 Imports: 
     ggplot2,
     magick,
+    magrittr,
     sf,
     stringr
