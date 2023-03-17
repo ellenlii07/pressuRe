@@ -18,6 +18,7 @@
 # add support for pliance
 # edit mask needs to be written
 # global pressure_import function (leave for V2)
+# document pedar insole size data
 
 # data list:
 ## Array. pressure data
@@ -229,8 +230,8 @@ load_pedar <- function(pressure_filepath) {
 
   # return
   return(list(pressure_array = pressure_array, pressure_system = "pedar",
-              sens_size = pedar_insole_type,
-              time = time))
+              sens_size = insole_type, time = time, masks = NULL,
+              events = NULL))
 }
 
 
@@ -402,163 +403,56 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   }
 #' @examples
 #' select_steps
-#' @importFrom
+#' @importFrom ggplot2 ggplot geom_line xlab ylab ggtitle
+#' @importFrom magrittr "%>%"
+#' @importFrom dplyr filter
 #' @export
 
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 2,
                           steps_Rn = 12, steps_Ln = 12) {
   # check this is pedar (or other suitable) data
+  if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
+    stop("data should be from pedar or f-scan")
+
+  # if pedar, get insole size
+  pedar_insole_type <- pressure_data[[3]]
 
   # Read in required pedar sensor areas
-  pedar_insole_type <- which(insoles == pressure_data[[3]])
-
-  # Read in required pedar sensor areas
-  pedarSensorAreas <- read.csv("Pedar insole areas.csv")
-  pedarSensorAreas <- as.vector(pedarSensorAreas[, pedar_insole_type] * 0.001)
+  load("data/pedar_insole_areas.rda")
+  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
 
   # Convert pressure data to force data (R & L)
-  Force_R <- t(t(x_df_R[ , 2:100]) * pedarSensorAreas)
-  Force_L <- t(t(x_df_L[ ,2:100]) * pedarSensorAreas)
-  Force_R <- rowSums(Force_R)
-  Force_L <- rowSums(Force_L)
-
-  # Add force and pressure columns to R&L dfs
-  x_df_R <- cbind(x_df_R, Force_R)
-  x_df_L <- cbind(x_df_L, Force_L)
+  dims <- dim(pressure_data[[1]])
+  force_R_mat <- matrix(pressure_data[[1]][1, , ],
+                        dims[2], dims[3]) * pedarSensorAreas
+  force_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
+                        dims[2], dims[3]) * pedarSensorAreas
+  force_R <- colSums(force_R_mat)
+  force_L <- colSums(force_L_mat)
 
   # Adjust thresholds to avoid errors
   threshold_R <- threshold_R + 0.01
   threshold_L <- threshold_L + 0.01
 
   # Get events
-  FS_events_R <- which(Force_R[-length(Force_R)] < threshold_R &
-                         Force_R[-1] > threshold_R) + 1
-  FO_events_R <- which(Force_R[-length(Force_R)] > threshold_R &
-                         Force_R[-1] < threshold_R) + 1
-  FS_events_L <- which(Force_L[-length(Force_L)] < threshold_L &
-                         Force_L[-1] > threshold_L) + 1
-  FO_events_L <- which(Force_L[-length(Force_L)] > threshold_L &
-                         Force_L[-1] < threshold_L) + 1
+  FS_events_R <- which(force_R[-length(force_R)] < threshold_R &
+                         force_R[-1] > threshold_R) + 1
+  FO_events_R <- which(force_R[-length(force_R)] > threshold_R &
+                         force_R[-1] < threshold_R) + 1
+  FS_events_L <- which(force_L[-length(force_L)] < threshold_L &
+                         force_L[-1] > threshold_L) + 1
+  FO_events_L <- which(force_L[-length(force_L)] > threshold_L &
+                         force_L[-1] < threshold_L) + 1
 
-  # Create Right steps
-  # Adjust events to ensure stance phase is used
+  # Create steps
+  ## Adjust events to ensure stance phase is used
   if (FO_events_R[1] < FS_events_R[1]) {
     FO_events_R <- FO_events_R[-1]
   }
   if ((length(FS_events_R)) > (length(FO_events_R))) {
     FS_events_R <- FS_events_R[-length(FS_events_R)]
   }
-
-  # Split into steps and combine into list. Also remove small (<0.1s) and
-  # large steps
-  max_frames <- stance_lim * cap_freq
-  Rlist <- list()
-  for (i in 1:length(FS_events_R)) {
-    VarName <- paste0("R_Stepa", i)
-    if (FO_events_R[i] - FS_events_R[i] > 10 && FO_events_R[i] - FS_events_R[i] < max_frames) {
-      Rlist[[VarName]] <- x_df_R[FS_events_R[i]:FO_events_R[i], ]
-    }
-  }
-
-  # Interpolate steps to 101 points across stance
-  Rlist2 <- list()
-  approxP <- function (x) {approx(x, n = 101)}
-  for (i in 1:length(Rlist)) {
-    Rlist2[[i]] <- apply(Rlist[[i]], 2, approxP)
-  }
-
-  for (i in 1:length(Rlist2)) {
-    for (j in 1:102) {
-      Rlist2[[c(i, j)]] <- Rlist2[[c(i, j, 2)]]
-    }
-  }
-
-  # Approve or discard steps
-  # Display curve mode
-  if (curve == "force") {
-    curve_col = 101
-    curve_nam = "Force (N)"
-  }
-  if (curve == "pressure") {
-    curve_col = 102
-    curve_nam = "Pressure (kPa)"
-  }
-
-  # Create data frames for plotting
-  for (i in 1:length(Rlist2)) {
-    VarName = paste0("R_Stepa", i)
-    assign(VarName, as.data.frame(cbind(Rlist2[[c(i, NULL, 1)]],
-                                        Rlist2[[c(i, NULL, curve_col)]])))
-  }
-
-  #Make data frame for background curves
-  for (i in 1:length(Rlist2)) {
-    VarName <- get(paste0("R_Stepa", i))
-    VarName2 <- paste0("R_Step", i)
-    VarName[, 1] <- (VarName[, 1] - min(VarName[, 1]))
-    colnames(VarName) <- c("Time", curve)
-    assign(VarName2, VarName)
-  }
-
-  R_Step <- data.frame(Time = numeric(0), Force = numeric(0), Step = numeric(0))
-  for (i in 1:length(Rlist)) {
-    VarName <- get(paste0("R_Step", i))
-    VarName <- cbind(VarName, rep(i, length(VarName[ ,1])))
-    colnames(VarName) <- c("Time", curve, "Step")
-    R_Step <- rbind(R_Step, VarName)
-  }
-
-  R_Step[,3] <- as.factor(R_Step[ ,3])
-
-  # Step selection. Plots force line and asks user to decide if acceptable
-  R_Included_Steps <- c()
-  n_selected <- 0
-  for (i in 1:length(Rlist2)) {
-    if (n_selected < steps_Rn) {
-      VarName = paste0("R_Step", i)
-      df = get(VarName)
-      df2 = R_Step
-      n_sel = paste0("Right foot: ", n_selected, " steps selected")
-      R_f = ggplot()
-      R_f = R_f + geom_line(data = df2, aes_string(colnames(df2)[1],
-                                                   colnames(df2)[2],
-                                                   group = colnames(df2)[3]),
-                            size = 1.5, colour = "grey")
-      R_f <- R_f + geom_line(data = df, aes_string(colnames(df)[1],
-                                                   colnames(df)[2]),
-                             size = 1.5, colour = "red")
-      R_f <- R_f + ylab(curve_nam) + xlab("Time (s)")
-      R_f <- R_f + annotate("text", x = 0.4, y = 30, colour = "blue",
-                            label = n_sel, size=8)
-      R_f <- R_f + theme_bw()
-      print(R_f)
-      Sys.sleep(2.5)
-      User_response <- winDialog(type=c("yesno"), "Keep right step?")
-      R_Included_Steps[i] <- User_response
-      if (User_response == "YES") {n_selected = n_selected + 1}
-    } else if (n_selected >= steps_Rn) {
-      R_Included_Steps[i] <- "NO"
-    }
-  }
-
-  Count <- 1
-  for (i in 1:length(Rlist2)) {
-    if(R_Included_Steps[i] == "NO") {
-      Rlist2[Count] <- NULL
-    } else {Count <- Count + 1}
-  }
-
-  # Find the mean step distribution R_Mean
-  for (i in 1:length(Rlist2)) {
-    Rlist2[[i]] <- matrix(as.numeric(unlist(Rlist2[[i]])), nrow=101, ncol=102)
-  }
-
-  R_Mean <- apply(simplify2array(Rlist2), 1:2, mean)
-  R_Mean <- R_Mean[ , -c(1,101,102)] # No need for extra columns here
-
-  # Create Left Steps
-  # Adjust events to ensure stance phase is used
   if (FO_events_L[1] < FS_events_L[1]) {
     FO_events_L <- FO_events_L[-1]
   }
@@ -566,144 +460,88 @@ select_steps <- function (pressure_data, threshold_R = 20,
     FS_events_L <- FS_events_L[-length(FS_events_L)]
   }
 
-  # Split into steps and combine into list. Also remove small (<0.1s) steps
-  Llist <- list()
-  for (i in 1:length(FS_events_L)) {
-    VarName <- paste0("L_Step", i)
-    if (FO_events_L[i] - FS_events_L[i] > 10 && FO_events_L[i] - FS_events_L[i] < max_frames) {
-      Llist[[VarName]] <- x_df_L[FS_events_L[i]:FO_events_L[i], ]
+  # Make steps into data frame
+  ## right
+  df_R <- data.frame(step = integer(), frame = integer(), force = double())
+  for (i in 1:length(FS_events_R)) {
+    if (FO_events_R[i] - FS_events_R[i] > min_frames) {
+      force_step <- force_R[FS_events_R[i]:FO_events_R[i]]
+      step <- data.frame(step = rep(i, length_out = length(force_step)),
+                         frame = c(1:length(force_step)),
+                         force = force_step)
+      df_R <- rbind(df_R, step)
     }
   }
 
-  # Interpolate steps to 101 points across stance
-  Llist2 <- list()
-  approxP <- function (x) {approx(x, n=101)}
-  for (i in 1:length(Llist)) {
-    Llist2[[i]] <- apply(Llist[[i]], 2, approxP)
-  }
-
-  for (i in 1:length(Llist2)) {
-    for (j in 1:102) {
-      Llist2[[c(i, j)]] <- Llist2[[c(i, j, 2)]]
+  ## left
+  df_L <- data.frame(step = integer(), frame = integer(), force = double())
+  for (i in 1:length(FS_events_L)) {
+    if (FO_events_L[i] - FS_events_L[i] > min_frames) {
+      force_step <- force_L[FS_events_L[i]:FO_events_L[i]]
+      step <- data.frame(step = rep(i, length_out = length(force_step)),
+                         frame = c(1:length(force_step)),
+                         force = force_step)
+      df_L <- rbind(df_L, step)
     }
   }
 
   # Approve or discard steps
-  # Create data frames for plotting
-  for (i in 1:length(Llist2)) {
-    VarName <- paste0("L_Stepa", i)
-    assign(VarName, as.data.frame(cbind(Llist2[[c(i, NULL, 1)]],
-                                        Llist2[[c(i, NULL, curve_col)]])))
+  ## right
+  for (stp in 1:length(FS_events_R)) {
+    # highlighted step df
+    df1 <- df_R %>% filter(step %in% stp)
+
+    # plot
+    g <- ggplot()
+    g <- g + geom_line(data = df_R, aes(x = frame, y = force,
+                                 group = step),
+                       linewidth = 1.5, color = "grey")
+    g <- g + geom_line(data = df1, aes(x = frame, y = force),
+                       linewidth = 1.5, color = "red")
+    g <- g + xlab("Frame no") + ylab("Force (N)")
+    g <- g + ggtitle(paste0("Right step ", i))
+    print(g)
+    Sys.sleep(2.5)
+
+    # get user to approve or reject step
+    resp <- menu(c("Y", "N"),
+                 title = "Do you want to keep (Y) or discard (N) this step?")
+    R_Included_Steps[i] <- resp
   }
 
-  #Make data frame for background curves
-  for (i in 1:length(Llist2)) {
-    VarName <- get(paste0("L_Stepa", i))
-    VarName2 <- paste0("L_Step", i)
-    VarName[,1] <- (VarName[, 1] - min(VarName[,1]))
-    colnames(VarName) <- c("Time", curve)
-    assign(VarName2, VarName)
+  # Approve or discard steps
+  ## left
+  for (stp in 1:length(FS_events_L)) {
+    # highlighted step df
+    df1 <- df_L %>% filter(step %in% stp)
+
+    # plot
+    g <- ggplot()
+    g <- g + geom_line(data = df_L, aes(x = frame, y = force,
+                                        group = step),
+                       linewidth = 1.5, color = "grey")
+    g <- g + geom_line(data = df1, aes(x = frame, y = force),
+                       linewidth = 1.5, color = "red")
+    g <- g + xlab("Frame no") + ylab("Force (N)")
+    g <- g + ggtitle(paste0("Left step ", i))
+    print(g)
+    Sys.sleep(2.5)
+
+    # get user to approve or reject step
+    resp <- menu(c("Y", "N"),
+                 title = "Do you want to keep (Y) or discard (N) this step?")
+    L_Included_Steps[i] <- resp
   }
 
-  L_Step <- data.frame(Time=numeric(0), Force=numeric(0), Step=numeric(0))
-  for (i in 1:length(Llist)) {
-    VarName <- get(paste0("L_Step", i))
-    VarName <- cbind(VarName, rep(i, length(VarName[, 1])))
-    colnames(VarName) <- c("Time", curve, "Step")
-    L_Step <- rbind(L_Step, VarName)
-  }
+  # make events df
+  R_Included_Steps
+  L_Included_Steps
 
-  L_Step[,3] <- as.factor(L_Step[,3])
+  # add events to pressure data
+  pressure_data[[6]] <- event_df
 
-  # Step selection. Plots force line and asks user to decide if acceptable
-  L_Included_Steps <- c()
-  n_selected <- 0
-  for (i in 1:length(Llist)) {
-    if (n_selected < steps_Ln) {
-      VarName <- paste0("L_Step", i)
-      df <- get(VarName)
-      df2 <- L_Step
-      n_sel <- paste0("Left foot: ", n_selected, " steps selected")
-      L_f <- ggplot()
-      L_f <- L_f + geom_line(data = df2, aes_string(colnames(df2)[1],
-                                                    colnames(df2)[2],
-                                                    group = colnames(df2)[3]),
-                             size = 1.5, colour = "grey")
-      L_f <- L_f + geom_line(data = df, aes_string(colnames(df)[1],
-                                                   colnames(df)[2]),
-                             size = 1.5, colour = "red")
-      L_f <- L_f + ylab(curve_nam) + xlab("Time (s)")
-      L_f <- L_f + annotate("text", x = 0.4, y = 30, colour = "blue",
-                            label = n_sel, size = 8)
-      L_f <- L_f + theme_bw()
-      print(L_f)
-      Sys.sleep(1.5)
-      User_response <- winDialog(type = c("yesno"), "Keep left step?")
-      L_Included_Steps[i] <- User_response
-      if (User_response == "YES") {n_selected = n_selected + 1}
-    } else if (n_selected >= steps_Ln) {
-      L_Included_Steps[i] <- "NO"
-    }
-  }
-
-  Count <- 1
-  for (i in 1:length(Llist2)) {
-    if(L_Included_Steps[i] == "NO") {
-      Llist2[Count] <- NULL
-    } else {
-      Count <- Count+1
-    }
-  }
-
-  # Find the mean step distribution L_Mean
-  for (i in 1:length(Llist2)) {
-    Llist2[[i]] <- matrix(as.numeric(unlist(Llist2[[i]])), nrow=101, ncol=102)
-  }
-
-  L_Mean <- apply(simplify2array(Llist2), 1:2, mean)
-  L_Mean <- L_Mean[, -c(1,101,102)]
-
-  ## Final list to be returned:
-  formatted_pedar <- list()
-
-  # [[1]] Right mean
-  formatted_pedar[[1]] <- R_Mean
-
-  # [[2]] Left mean
-  formatted_pedar[[2]] <- L_Mean
-
-  # [[3]] Capture frequency
-  formatted_pedar[[3]] <- cap_freq
-
-  # [[4]] Insole type
-  formatted_pedar[[4]] <- pedar_insole_type
-
-  # [[5]] Number of right steps
-  formatted_pedar[[5]] <- length(Rlist2)
-
-  # [[6]]  Number of left steps
-  formatted_pedar[[6]] <- length(Llist2)
-
-  # [[7 onwards...]] Right steps (not normalized)
-  R_steps_in = which(R_Included_Steps == "YES")
-  for (i in 1:length(R_Included_Steps)) {
-    y = Rlist[[R_steps_in[i]]]
-    rownames(y) = NULL
-    y = y[, -c(1, 101, 102)]
-    formatted_pedar[[6 + i]] = y
-  }
-
-  # [[... onwards]] Left steps (not normalized)
-  L_steps_in = which(L_Included_Steps =="YES")
-  for (i in 1:length(L_Included_Steps)) {
-    y = Llist[[L_steps_in[i]]]
-    rownames(y) = NULL
-    y = y[, -c(1, 101, 102)]
-    formatted_pedar[[6 + length(R_steps_in) + i]] = y
-  }
-
-  # Return formatted list
-  return(formatted_pedar)
+  # Return
+  return(pressure_data)
 }
 
 
