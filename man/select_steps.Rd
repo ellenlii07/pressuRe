@@ -8,9 +8,10 @@ select_steps(
   pressure_data,
   threshold_R = 20,
   threshold_L = 20,
-  min_frames = 2,
-  steps_Rn = 12,
-  steps_Ln = 12
+  min_frames = 20,
+  steps_Rn = 5,
+  steps_Ln = 5,
+  skip = 2
 )
 }
 \arguments{
@@ -20,9 +21,16 @@ select_steps(
 
 \item{min_frames}{Numeric. Minimum number of frames that need to be in step}
 
-\item{steps_Rn}{Numeric. Target number of steps for right foot}
+\item{steps_Rn}{Numeric. Target number of steps for right foot. User will be
+asked to keep selected steps until this target is reached or they run out of
+candidate steps}
 
-\item{steps_Ln}{Numeric. Target number of steps for left foot}
+\item{steps_Ln}{Numeric. Target number of steps for left foot. User will be
+asked to keep selected steps until this target is reached or they run out of
+candidate steps}
+
+\item{skip}{Numeric. Usually the first few steps of a trial are accelerating
+and not representative of steady state walking so this removes them}
 
 \item{pressure_data.}{List}
 }
@@ -41,5 +49,5 @@ select_steps(
 Select steps, usually from insole data, and format for analysis
 }
 \examples{
-select_steps
+select_steps(pressure_data)
 }

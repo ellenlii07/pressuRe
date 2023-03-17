@@ -9,8 +9,8 @@
 # allow for multiple masking schemes
 # change footprint function name to more generic name?
 # create_mask and edit_mask need to work interactively how to check for cran
-# select steps needs to be rewritten
-# make pedar sensor areas into RData files. Do we have all insoles? Double check areas
+# select steps > output data frame
+# Do we have all pedar insoles? Double check areas
 # force curve (and others) to work with insole data
 # filepath to fscan example
 # can load-iscan be made more generic?
@@ -389,8 +389,14 @@ pressure_interp <- function(pressure_data, interp_to) {
 #' @param threshold_R Numeric. Threshold force to define start and end of step
 #' @param threshold_L Numeric. Threshold force to define start and end of step
 #' @param min_frames Numeric. Minimum number of frames that need to be in step
-#' @param steps_Rn Numeric. Target number of steps for right foot
-#' @param steps_Ln Numeric. Target number of steps for left foot
+#' @param steps_Rn Numeric. Target number of steps for right foot. User will be
+#' asked to keep selected steps until this target is reached or they run out of
+#' candidate steps
+#' @param steps_Ln Numeric. Target number of steps for left foot. User will be
+#' asked to keep selected steps until this target is reached or they run out of
+#' candidate steps
+#' @param skip Numeric. Usually the first few steps of a trial are accelerating
+#' and not representative of steady state walking so this removes them
 #' @return
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
@@ -402,15 +408,15 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   \item events. List
 #'   }
 #' @examples
-#' select_steps
-#' @importFrom ggplot2 ggplot geom_line xlab ylab ggtitle
+#' select_steps(pressure_data)
+#' @importFrom ggplot2 ggplot aes geom_line xlab ylab ggtitle
 #' @importFrom magrittr "%>%"
 #' @importFrom dplyr filter
 #' @export
 
 select_steps <- function (pressure_data, threshold_R = 20,
-                          threshold_L = 20, min_frames = 2,
-                          steps_Rn = 12, steps_Ln = 12) {
+                          threshold_L = 20, min_frames = 10,
+                          steps_Rn = 5, steps_Ln = 5, skip = 2) {
   # check this is pedar (or other suitable) data
   if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
     stop("data should be from pedar or f-scan")
@@ -418,7 +424,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
   # if pedar, get insole size
   pedar_insole_type <- pressure_data[[3]]
 
-  # Read in required pedar sensor areas
+  # Read in required pedar sensor areas (imported in mm^2 but adjust for kPa)
   load("data/pedar_insole_areas.rda")
   pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
 
@@ -487,6 +493,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
 
   # Approve or discard steps
   ## right
+  include_stps_R <- c()
   for (stp in 1:length(FS_events_R)) {
     # highlighted step df
     df1 <- df_R %>% filter(step %in% stp)
@@ -499,18 +506,22 @@ select_steps <- function (pressure_data, threshold_R = 20,
     g <- g + geom_line(data = df1, aes(x = frame, y = force),
                        linewidth = 1.5, color = "red")
     g <- g + xlab("Frame no") + ylab("Force (N)")
-    g <- g + ggtitle(paste0("Right step ", i))
+    g <- g + ggtitle(paste0("Right step ", stp))
     print(g)
     Sys.sleep(2.5)
 
     # get user to approve or reject step
     resp <- menu(c("Y", "N"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    R_Included_Steps[i] <- resp
+    include_stps_R <- c(include_stps_R, resp)
+
+    # check if number of steps has been reached
+    if (sum(include_stps_R == 1) >= steps_Rn) {break}
   }
 
   # Approve or discard steps
   ## left
+  include_stps_L <- c()
   for (stp in 1:length(FS_events_L)) {
     # highlighted step df
     df1 <- df_L %>% filter(step %in% stp)
@@ -523,19 +534,26 @@ select_steps <- function (pressure_data, threshold_R = 20,
     g <- g + geom_line(data = df1, aes(x = frame, y = force),
                        linewidth = 1.5, color = "red")
     g <- g + xlab("Frame no") + ylab("Force (N)")
-    g <- g + ggtitle(paste0("Left step ", i))
+    g <- g + ggtitle(paste0("Left step ", stp))
     print(g)
     Sys.sleep(2.5)
 
     # get user to approve or reject step
     resp <- menu(c("Y", "N"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    L_Included_Steps[i] <- resp
+    include_stps_L <- c(include_stps_R, resp)
+
+    # check if number of steps has been reached
+    if (sum(include_stps_R == 1) >= steps_Rn) {break}
   }
 
   # make events df
-  R_Included_Steps
-  L_Included_Steps
+  event_df <- data.frame(side =  c(rep("RIGHT", length.out = length(include_stps_R)),
+                                   rep("LEFT", length.out = length(include_stps_L))),
+                         FON = c(FS_events_R[which(include_stps_R == 1)],
+                                 FS_events_L[which(include_stps_L == 1)]),
+                         FOFF = c(FO_events_R[which(include_stps_R == 1)],
+                                  FO_events_L[which(include_stps_L == 1)]))
 
   # add events to pressure data
   pressure_data[[6]] <- event_df
