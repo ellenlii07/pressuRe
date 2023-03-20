@@ -656,7 +656,7 @@ auto_detect_side <- function(pressure_data) {
 #' @return Numeric vector containing force values
 #' @examples
 #' force_curve(pressure_data, plot = TRUE)
-#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
 force_curve <- function(pressure_data, plot = FALSE) {
@@ -708,7 +708,7 @@ force_curve <- function(pressure_data, plot = FALSE) {
 #' @return Numeric vector containing force values
 #' @examples
 #' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
-#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
 pressure_curve <- function(pressure_frames, variable = "peak",
@@ -769,7 +769,7 @@ pressure_curve <- function(pressure_frames, variable = "peak",
 #' @return Numeric vector containing force values
 #' @examples
 #' area_curve(pressure_data, plot = TRUE)
-#' @importFrom ggplot2 ggplot geom_line theme_bw xlab ylab
+#' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
 area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
@@ -823,7 +823,6 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 #' @return Data frame with x and y coordinates of COP throughout trial
 #' @examples
 #' cop(pressure_data)
-#'
 #' @export
 
 cop <- function(pressure_data) {
@@ -942,7 +941,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @return ggplot plot object
 #' @examples
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
-#' @importFrom ggplot2 ggplot geom_raster
+#' @importFrom ggplot2 ggplot aes geom_raster
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
