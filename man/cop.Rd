@@ -18,7 +18,6 @@ Generates center of pressure coordinates
 }
 \examples{
 cop(pressure_data)
-
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

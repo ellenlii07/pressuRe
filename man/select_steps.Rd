@@ -8,7 +8,7 @@ select_steps(
   pressure_data,
   threshold_R = 20,
   threshold_L = 20,
-  min_frames = 20,
+  min_frames = 10,
   steps_Rn = 5,
   steps_Ln = 5,
   skip = 2

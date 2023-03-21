@@ -1,24 +1,23 @@
 # to do
-# add more input tests to throw errors
 # pti to pressure curve function
 # option to choose different colors in plot_pressure
 # fscan import function
+# rewrite CPEI
 # more output variables need to be added to  mask analysis
 # edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # allow for multiple masking schemes
 # change footprint function name to more generic name?
-# create_mask and edit_mask need to work interactively how to check for cran
-# select steps > output data frame
 # Do we have all pedar insoles? Double check areas
 # force curve (and others) to work with insole data
 # filepath to fscan example
 # can load-iscan be made more generic?
-# can cop use sensor_coords to get coordinates?
 # add support for pliance
 # edit mask needs to be written
 # global pressure_import function (leave for V2)
-# document pedar insole size data
+# document pedar insole size data and grid data
+# add more input tests to throw errors
+# pedar coords as rda
 
 # data list:
 ## Array. pressure data
@@ -54,7 +53,7 @@
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_data = load_emed("inst/extdata/emed_test.lst")
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' @importFrom stringr str_extract_all str_detect
 #' @export
 
@@ -417,6 +416,10 @@ pressure_interp <- function(pressure_data, interp_to) {
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 10,
                           steps_Rn = 5, steps_Ln = 5, skip = 2) {
+  # check session is interactive
+  if (interactive == FALSE)
+    stop("user needs to select suitable steps")
+
   # check this is pedar (or other suitable) data
   if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
     stop("data should be from pedar or f-scan")
@@ -581,7 +584,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
 auto_detect_side <- function(pressure_data) {
   # max pressure footprint
   fp <- footprint(pressure_data)
-  fp_coords <- sensor_coords(pressure_data)
+  fp_coords <- sensor_coords(pressure_data, "all")
   P <- c(fp)
   sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord, P = P)
   sc_df <- sc_df[which(P >= 5), ]
@@ -976,7 +979,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   }
 
   # generate coordinates for each sensor
-  sens_coords <- sensor_coords(pressure_data)
+  sens_coords <- sensor_coords(pressure_data, "all")
 
   # overall dimensions of array
   dims <- dim(pressure_data[[1]])
@@ -1100,7 +1103,7 @@ pressure_outline <- function(pressure_data, frame) {
 #' @examples
 #' animate_pressure(pressure_data, fps = 10, "testgif.gif")
 #' @importFrom stringr str_ends
-#' @importFrom magick image_animate image_write
+#' @importFrom magick image_graph image_animate image_write
 #' @export
 
 animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
@@ -1149,7 +1152,7 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
   }
 
   # plot
-  img <- image_graph(600, 340, res = 96)
+  img <- magick::image_graph(600, 340, res = 96)
   for (i in 1:dim(pressure_data[[1]])[3]) {
     df <- press_df(pressure_data, i)
     g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour)))
@@ -1175,10 +1178,10 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
   gc()
 
   # create animation
-  animation <- image_animate(img, fps = fps, optimize = TRUE)
+  animation <- magick::image_animate(img, fps = fps, optimize = TRUE)
 
   # save animation
-  image_write(animation, filename)
+  magick::image_write(animation, filename)
 
   # preview if required
   if (preview == TRUE) {print(animation)}
@@ -1192,15 +1195,18 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
-#' @param side Character. "RIGHT" or "LEFT"
+#' @param foot_side Character. "RIGHT", "LEFT", or "auto". Auto uses
+#' auto_detect_side function
 #' @param sens Numeric. Number of frames per second in animation
 #' @param plot Logical. Whether to play the animation
 #' @return List. Contains polygon with each mask
 #' @examples
-#' automask(pressure_data, sens = 4, plot = TRUE)
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
+#' @importFrom zoo rollapply
 #' @export
 
-automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
+automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
   # Helper functions
   vector_to_polygon <- function(x) {
     xa <- c()
@@ -1247,7 +1253,7 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
   max_df <- footprint(pressure_data)
 
   # coordinates
-  sens_coords <- sensor_coords(pressure_data)
+  sens_coords <- sensor_coords(pressure_data, "all")
 
   # make data frame
   P <- c(max_df)
@@ -1255,6 +1261,16 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
                           P = P)
   em_act_df <- em_act_df[which(P >= 5), ]
   em_act_df$P <- NULL
+
+
+  # ===========================================================================
+
+  # side
+  if (foot_side == "auto") {
+    side <- auto_detect_side(pressure_data)
+  } else {
+    side <- foot_side
+  }
 
 
   # ===========================================================================
@@ -1823,46 +1839,52 @@ automask <- function(pressure_data, side,  sens = 4, plot = FALSE) {
 #' of the measurement.
 #' @param image String. "max" = footprint of maximum sensors. "mean"
 #'   average value of sensors over time (usually for static analyses)
+#' @param n_verts Numeric. Number of vertices in mask
+#' @param preview Logical. Show new maks on pressure image
 #' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
-#' @importFrom
+#' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' pressure_data <- create_mask(pressure_data, 4)
+#' @importFrom grDevices x11
+#' @importFrom ggmap gglocator
+#' @importFrom ggplot2 aes geom_path
+#' @importFrom sf st_polygon
 #' @export
 
-create_mask <- function(pressure_data, image = "max") {
+create_mask <- function(pressure_data, n_verts = 4, image = "max",
+                        preview = TRUE) {
+  # check session is interactive
+  if (interactive == FALSE)
+    stop("user needs to select mask vertices")
+
   # plot footprint
-  g <- plot_footprint(pressure_data[[1]])
+  grDevices::x11()
+  g <- plot_pressure(pressure_data)
   print(g)
 
   # interactively select area
   message("Select footprint")
-  mask <- gglocator(4)
+  mask <- gglocator(n_verts)
   mask <- data.frame(x = mask[, 1], y = mask[, 2])
   mask <- mask[c(1:nrow(mask), 1), ]
 
-  # which sensors fall in mask
-  dims <- dim(pressure_frames)
-  x_cor <- seq(from = (sens_x / 2), by = sens_x, length.out = dims[2])
-  x_cor <- rep(x_cor, each = dims[1])
-  y_cor <- seq(from = (sens_y / 2) + ((dims[1] - 1) * sens_y),
-               by = sens_y * -1, length.out = dims[1])
-  y_cor <- rep(y_cor, times = dims[2])
-  sensor_def <- point.in.polygon(point.x = x_cor, point.y = y_cor,
-                                 pol.x = mask$x, pol.y = mask$y)
-  masked <- which(sensor_def == 1)
+  # preview
+  if (preview == TRUE) {
+    g <- g + geom_path(data = mask, aes(x, y), color = "red")
+    print(g)
+  }
 
-  # define orthogonal area
-  x_max <- ceiling(max(x_cor[masked]) / 0.005)
-  x_min <- floor(min(x_cor[masked])  / 0.005)
-  y_max <- ceiling(max(y_cor[masked]) / 0.005)
-  y_max <- dims[1] - y_max
-  y_min <- floor(min(y_cor[masked]) / 0.005)
-  y_min <- dims[1] - y_min
+  # mask to polygon
+  mask_pol <- st_polygon(list(as.matrix(mask)))
 
-  # define reduced array
-  pressure_array_masked <- pressure_frames[y_max:y_min, x_min:x_max, ]
+  # update mask list
+  mask_list <- pressure_data[[5]]
+  mask_list[[length(mask_list) + 1]] <- mask_pol
+  pressure_data[[5]] <- mask_list
 
   # return pressure frames for selected area
-  return(pressure_array_masked)
+  return(pressure_data)
 }
 
 
@@ -1876,8 +1898,12 @@ create_mask <- function(pressure_data, image = "max") {
 #' @return List.
 #' @examples
 #' edit_mask(pressure_data)
+#' @export
 
 edit_mask <- function(pressure_data) {
+  # check session is interactive
+  if (interactive == FALSE)
+    stop("user needs to select mask vertices")
 
 }
 
@@ -1890,15 +1916,23 @@ edit_mask <- function(pressure_data) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_frames List. First item is a 3D array covering each timepoint
 #' of the measurement.
-#' @param side String. "right" or "left". Required for automatic detection of
+#' @param foot_side String. "right" or "left". Required for automatic detection of
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
 #' @return Numeric. CPEI value
 #' @examples
-#' cpei(pressure_data, side = "right", plot = TRUE)
+#' cpei(pressure_data, foot_side = "auto", plot = TRUE)
 
 cpei <- function(pressure_data, side, plot_result = FALSE) {
-  ## geometry helper functions
+  # check set up
+  if (interactive == FALSE)
+    stop("we recommend user reviews each measurement")
+
+  #ff_width_line
+  #cop_line
+  #cop_straight
+
+  # geometry helper functions
   # Finds the intersection point of a line from a point perpendicular to
   # another line
   perp_intersect <- function(line, point) {
@@ -1955,7 +1989,7 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
                                              , ]
   fp_out <- footprint_outline(pressure_frames_trimmed)
 
-  # find the 2 sets of points with the largest dstance between them
+  # find the 2 sets of points with the largest distance between them
   dis <- as.matrix(dist(fp_out))
   dis <- dis[row(dis) == (col(dis) - 1)]
   max_2 <- order(dis)[(length(dis) - 1):length(dis)]
@@ -2115,46 +2149,16 @@ cpei <- function(pressure_data, side, plot_result = FALSE) {
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
-  # Helper functions
-  sensor_to_polygon <- function(act_sens, row_no, max_df_rows, max_df_cols) {
-    sensor_x_coord <- (act_sens[row_no, 2] * 0.005) - 0.0025
-    sensor_y_coord <- ((max_df_rows * 0.005) - 0.0025) -
-      act_sens[row_no, 1] * 0.005
-    x1 <- sensor_x_coord - 0.0025
-    y1 <- sensor_y_coord + 0.0025
-    x2 <- sensor_x_coord + 0.0025
-    y2 <- sensor_y_coord + 0.0025
-    x3 <- sensor_x_coord + 0.0025
-    y3 <- sensor_y_coord - 0.0025
-    x4 <- sensor_x_coord - 0.0025
-    y4 <- sensor_y_coord - 0.0025
-    sens_polygon <- st_polygon(list(matrix(c(x1, x2, x3, x4, x1,
-                                             y1, y2, y3, y4, y1), 5, 2)))
-    return(sens_polygon)
-  }
-
   # sensor area
   sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
   # Make active sensors into polygons
-  ## Find max footprint
-  max_df <- apply(simplify2array(pressure_data[[1]]), 1:2, max)
-
-  ## overall dimensions
-  dims <- dim(max_df)
-
-  ## Find which sensors are non zero
-  act_sens <- which(max_df > 0, arr.ind = TRUE)
-
-  ## make list of polygons
-  act_sens_poly <- list()
-  for (i in 1:nrow(act_sens)) {
-    act_sens_poly[[i]] <- sensor_to_polygon(act_sens, i, dims[1], dims[2])
-  }
+  sens_coords <- sensor_coords(pressure_data, pressure_image = "all_active")
+  sens_poly <- sensor_2_polygon(sens_coords, pressure_data)
 
   # For each region mask, find which polygons intersect
-  sens_mask_df <- matrix(rep(0, length.out = (nrow(act_sens) * length(masks))),
-                         nrow = nrow(act_sens), ncol = length(masks))
+  sens_mask_df <- matrix(rep(0, length.out = (length(sens_poly) * length(masks))),
+                         nrow = length(sens_poly), ncol = length(masks))
   for (i in 1:length(masks)){
     for (j in 1:length(act_sens_poly)) {
       x <- st_intersects(masks[[i]], act_sens_poly[[j]])
@@ -2277,7 +2281,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 #' provided here
 #' @return Data frame. x and y coordinates of sensors
 #' @examples
-#' sensor_coords(pressure_data)
+#' coords <- sensor_coords(pressure_data)
 #' @noRd
 
 sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
@@ -2317,6 +2321,7 @@ sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
 
 #' interpolation function
 #' @importFrom stats approx
+#' @noRd
 approxP <- function(x, interp_to) {
   y <- approx(x, n = interp_to)
   y$x <- NULL
@@ -2324,84 +2329,11 @@ approxP <- function(x, interp_to) {
   return(y)
 }
 
-#' gglocator
-#' @param n Integer. Number of points to select
-#' @return Data frame. x and y coordinates of selected point
-
-gglocator <- function(n = 1, message = FALSE, xexpand = c(.0, 0),
-                      yexpand = c(.0, 0), mercator = TRUE) {
-
-  if(n > 1){
-    df <- NULL
-    for(k in 1:n){
-      df <- rbind(df, gglocator(message = message,
-                                xexpand = xexpand, yexpand = yexpand,
-                                mercator = mercator))
-    }
-    return(df)
-  }
-
-  object <- last_plot()
-  if(is.null(object)){
-    stop("no plots available")
-  }
-
-  # find the correct viewport for the npc coordinates
-  x <- unlist(current.vpTree())
-  x <- unname(x[grep("\\.name$", names(x))])
-  x <- grep("panel", x, fixed = TRUE, value = TRUE)
-  n_panels <- length(x)
-  if(n_panels == 0){
-    stop("ggmap plot not detected in current device")
-  }
-  if(n_panels > 1){
-    x <- x[1]
-    warning(gettextf("multiple plots detected, choosing one (\"%s\")",
-                     x), domain = NA)
-  }
-  previous_viewport <- current.vpPath()
-  seekViewport(x, recording = FALSE)
-
-  # when exiting function, return to previous position in viewport tree
-  on.exit(upViewport(0, recording = FALSE))
-  if(!is.null(previous_viewport)){
-    on.exit(downViewport(previous_viewport, strict = TRUE, recording = FALSE),
-            add = TRUE)
-  }
-
-  # get the position relative to that viewport
-  loc <-  as.numeric(grid.locator("npc"))
-
-  # scale the position to the plot
-
-  # get the x.range and y.range from ggplot
-  plot_info <- ggplot_build(object)
-  if("layout" %in% names(plot_info)){
-    ranges <- plot_info$layout$panel_ranges[[1]]
-  } else{
-    ranges <- plot_info$panel$ranges[[1]]
-  }
-  xrng <- ranges$x.range
-  yrng <- ranges$y.range
-
-  xrng <- expand_range(range = xrng, mul = xexpand[1], add = xexpand[2])
-  yrng <- expand_range(range = yrng, mul = yexpand[1], add = yexpand[2])
-
-  # format and return
-  point <- data.frame(xrng[1] + loc[1]*diff(xrng),
-                      yrng[1] + loc[2]*diff(yrng))
-  if(isTRUE(mercator)){
-    yrng2 <- LonLat2XY(0, yrng, zoom = 0, ypix = 256)$y
-    point[[2]] <- XY2LonLat(y = yrng2[1] + loc[2] * diff(yrng2),
-                            x = 0, X = 0, Y = 0, zoom = 0, ypix = 256)[[2]]
-  }
-  names(point) <- with(object, c(deparse(mapping$x), deparse(mapping$y)))
-  point
-}
-
 
 #' Get minimum bounding box (angle)
 #' @param xy Matrix. n row by 2 column with x-y coords of points to be bounded
+#' @noRd
+
 getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
 
@@ -2456,6 +2388,7 @@ getMinBBox <- function(xy) {
 
 
 #' sf masks to dataframe
+#' @noRd
 masks_2_df <- function(masks) {
   # no. of masks
   n_masks <- length(masks)
@@ -2474,5 +2407,82 @@ masks_2_df <- function(masks) {
   }
 
   # return
+  return(df)
+}
+
+
+#" rectilinear sensor array to polygon
+#' @noRd
+sensor_2_polygon <- function(sens_coords, pressure_data) {
+  # sensor dimensions
+  width <- pressure_data[[3]][1]
+  height <- pressure_data[[3]][2]
+
+  sens_polygons <- list()
+  # get corner points and make into polygon
+  for (sens in 1:nrow(sens_coords)) {
+    x1 <- sens_coords[sens, 1] - width
+    y1 <- sens_coords[sens, 2] + height
+    x2 <- sens_coords[sens, 1] + width
+    y2 <- sens_coords[sens, 2] + height
+    x3 <- sens_coords[sens, 1] + width
+    y3 <- sens_coords[sens, 2] - height
+    x4 <- sens_coords[sens, 1] - width
+    y4 <- sens_coords[sens, 2] - height
+    sens_polygons[[sens]] <- st_polygon(list(matrix(c(x1, x2, x3, x4, x1,
+                                                      y1, y2, y3, y4, y1), 5, 2)))
+  }
+
+  # return
+  return(sens_polygons)
+}
+
+
+#' plot pedar
+plot_pedar <- function(pressure_data, pressure_image = "step", step_n) {
+  # check this is pedar (or other suitable) data
+  if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
+    stop("data should be from pedar or f-scan")
+
+  # load pedar coords
+  pedarSensors <- read.csv("Pedar insole grid2.csv", header = FALSE)
+
+  # get L+ R data frames
+  dims <- dim(pressure_data[[1]])
+  force_R_mat <- matrix(pressure_data[[1]][1, , ],
+                        dims[2], dims[3]) * pedarSensorAreas
+  force_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
+                        dims[2], dims[3]) * pedarSensorAreas
+
+  position <- data.frame(id = rep(ids, each = 4), x = xs, y = ys)
+  df <- merge(df, position, by = c("id"))
+
+  # add color
+  df <- df %>% mutate(col = case_when(value >= 0 & value < 40 ~ "grey",
+                                      value >= 0 & value < 60 ~ "lightblue",
+                                      value >= 60 & value < 100 ~ "darkblue",
+                                      value >= 100 & value < 150 ~ "green",
+                                      value >= 150 & value < 220 ~ "yellow",
+                                      value >= 220 & value < 300 ~ "red",
+                                      value >= 300 ~ "pink"))
+
+  # plot
+  p <- ggplot(df, aes(x = x, y = y, group = id))
+  p <- p + geom_polygon(fill = df$col, color = "black")
+  p <- p + coord_fixed()
+  p <- p + theme_blank()
+  print(p)
+}
+
+generate_colors <- function(df, break_values, break_colors) {
+
+  df <- df %>% mutate(col = case_when(value >= 0 & value < 40 ~ "grey",
+                                      value >= 0 & value < 60 ~ "lightblue",
+                                      value >= 60 & value < 100 ~ "darkblue",
+                                      value >= 100 & value < 150 ~ "green",
+                                      value >= 150 & value < 220 ~ "yellow",
+                                      value >= 220 & value < 300 ~ "red",
+                                      value >= 300 ~ "pink"))
+
   return(df)
 }

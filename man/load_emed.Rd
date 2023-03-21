@@ -26,7 +26,7 @@ Imports and formats .lst files collected on emed system and
    exported from Novel software
 }
 \examples{
-pressure_data = load_emed("inst/extdata/emed_test.lst")
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
