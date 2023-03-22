@@ -18,6 +18,7 @@
 # document pedar insole size data and grid data
 # add more input tests to throw errors
 # pedar coords as rda
+# update color in animate function
 
 # data list:
 ## Array. pressure data
@@ -940,15 +941,23 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' increase data density
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
 #' @param plot_outline Logical. If TRUE, overlay convex hull outline on plot
+#' @param plot_colors Character. "default": novel color scheme; "custom": user
+#' supplied
+#' @param break_values Vector. If plot_colors is "custom", values to split
+#' colors at
+#' @param break_colors Vector. If plot_colors is "custom", colors to use.
+#' Should be one shorter than break_values
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @return ggplot plot object
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 #' @importFrom ggplot2 ggplot aes geom_raster
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           plot_COP = FALSE, plot_outline = FALSE,
+                          plot_colors = "default", break_values, break_colors,
                           plot = TRUE) {
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
@@ -990,29 +999,17 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   colnames(cor) <- c("x", "y", "value")
 
   # add colors
-  plot_cs <- list(cs_breaks = c(0, 15, 40, 60, 100, 150, 220, 300, 5000),
-                  cs_cols = c("white", "grey", "blue", "light blue",
-                              "green", "yellow", "red", "deeppink"))
-  cols <- unlist(plot_cs[[2]])
-  color <- rep(NA, times = nrow(cor))
-  for (i in 1:nrow(cor)) {
-    if (cor$value[i] < 15) {color[i] = 1}
-    if (cor$value[i] >= 15 && cor$value[i] < 40) {color[i] = 2}
-    if (cor$value[i] >= 40 && cor$value[i] < 60) {color[i] = 3}
-    if (cor$value[i] >= 60 && cor$value[i] < 100) {color[i] = 4}
-    if (cor$value[i] >= 100 && cor$value[i] < 150) {color[i] = 5}
-    if (cor$value[i] >= 150 && cor$value[i] < 220) {color[i] = 6}
-    if (cor$value[i] >= 220 && cor$value[i] < 300) {color[i] = 7}
-    if (cor$value[i] >= 300) {color[i] = 8}
+  cor <- generate_colors(cor, col_type = plot_colors, break_values,
+                         break_colors)
+  if (plot_colors == "default") {
+    break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow",
+                      "red", "pink")
   }
-
-  # combine with data frame
-  cor <- cbind(cor, color)
 
   ## plot
   g <- ggplot()
-  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = as.factor(color)))
-  g <- g + scale_fill_manual(values = cols)
+  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = cols))
+  g <- g + scale_fill_manual(values = break_colors)
   g <- g + scale_x_continuous(expand = c(0, 0))
   g <- g + scale_y_continuous(expand = c(0, 0))
   g <- g + coord_fixed()
@@ -2445,7 +2442,7 @@ plot_pedar <- function(pressure_data, pressure_image = "step", step_n) {
     stop("data should be from pedar or f-scan")
 
   # load pedar coords
-  pedarSensors <- read.csv("Pedar insole grid2.csv", header = FALSE)
+  load("data/pedar_insole_grid.rda")
 
   # get L+ R data frames
   dims <- dim(pressure_data[[1]])
@@ -2474,15 +2471,33 @@ plot_pedar <- function(pressure_data, pressure_image = "step", step_n) {
   print(p)
 }
 
-generate_colors <- function(df, break_values, break_colors) {
+#' @param break_values Vector. Vector with break values to be used. Should be one
+#' shorter than break_values
+#' @param break_colors Vector. Vector with colors to be used. Should be one
+#' longer than break_values
+#' @param col_type Character. "default": novel color scheme; "custom": user
+#' supplied
+#' @noRd
+generate_colors <- function(df, col_type = "default", break_values,
+                            break_colors) {
+  if (col_type == "default") {
+    break_values <- c(-1, 0, 40, 60, 100, 150, 220, 300, 1000000)
+    break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow", "red","pink")
+  } else {
+    # check break_values and break_colors
+    if(break_values[1] <= 0)
+      stop("first break value should be >1")
+    if(length(break_value) != (length(break_colors) - 1))
+      stop("break_values should be one shorter than break_colors")
 
-  df <- df %>% mutate(col = case_when(value >= 0 & value < 40 ~ "grey",
-                                      value >= 0 & value < 60 ~ "lightblue",
-                                      value >= 60 & value < 100 ~ "darkblue",
-                                      value >= 100 & value < 150 ~ "green",
-                                      value >= 150 & value < 220 ~ "yellow",
-                                      value >= 220 & value < 300 ~ "red",
-                                      value >= 300 ~ "pink"))
+    # add high final value to break_colors
+    break_colors <- c(break_colors, 1000000)
+  }
 
-  return(df)
+  # add col column
+  df$cols <- cut(df$value, breaks = break_values,
+                 labels = break_colors)
+
+  #return
+  return (df)
 }
