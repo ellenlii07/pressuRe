@@ -2436,7 +2436,7 @@ sensor_2_polygon <- function(sens_coords, pressure_data) {
 
 
 #' plot pedar
-plot_pedar <- function(pressure_data, pressure_image = "step", step_n) {
+plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   # check this is pedar (or other suitable) data
   if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
     stop("data should be from pedar or f-scan")
@@ -2446,10 +2446,34 @@ plot_pedar <- function(pressure_data, pressure_image = "step", step_n) {
 
   # get L+ R data frames
   dims <- dim(pressure_data[[1]])
-  force_R_mat <- matrix(pressure_data[[1]][1, , ],
-                        dims[2], dims[3]) * pedarSensorAreas
-  force_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
-                        dims[2], dims[3]) * pedarSensorAreas
+  pressure_R_mat <- matrix(pressure_data[[1]][1, , ],
+                           dims[2], dims[3])
+  pressure_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
+                           dims[2], dims[3])
+
+  # separate into steps
+  start_end_R <- pressure_data[[6]]
+  start_end_L <- pressure_data[[6]]
+
+  R_Mean_max <- apply(pressure_R_mat, 1, max)
+  L_Mean_max <- apply(pressure_L_mat, 1, max)
+  Mean_max <- c(L_Mean_max, R_Mean_max)
+
+  ids <- c()
+  for (i in 1:99) {ids = append(ids, paste0("L", i))}
+  for (i in 1:99) {ids = append(ids, paste0("R", i))}
+
+  df <- data.frame(id = ids, value = Mean_max)
+
+  xs <- c()
+  for (i in c(101:199, 1:99)) {
+    for (j in c(1, 3, 5, 7)) {xs = append(xs, pedar_insole_grid[i, j])}
+  }
+
+  ys <- c()
+  for (i in c(101:199, 1:99)) {
+    for (j in c(2, 4, 6, 8)) {xs = append(xs, pedar_insole_grid[i, j])}
+  }
 
   position <- data.frame(id = rep(ids, each = 4), x = xs, y = ys)
   df <- merge(df, position, by = c("id"))
@@ -2482,7 +2506,8 @@ generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
   if (col_type == "default") {
     break_values <- c(-1, 0, 40, 60, 100, 150, 220, 300, 1000000)
-    break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow", "red","pink")
+    break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow",
+                      "red","pink")
   } else {
     # check break_values and break_colors
     if(break_values[1] <= 0)
