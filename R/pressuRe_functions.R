@@ -9,7 +9,7 @@
 # allow for multiple masking schemes
 # change footprint function name to more generic name?
 # Do we have all pedar insoles? Double check areas
-# force curve (and others) to work with insole data
+# area curve (and others) to work with insole data
 # filepath to fscan example
 # can load-iscan be made more generic?
 # add support for pliance
@@ -17,8 +17,10 @@
 # global pressure_import function (leave for V2)
 # document pedar insole size data and grid data
 # add more input tests to throw errors
-# pedar coords as rda
 # update color in animate function
+# geom raster doesn't work with non-uniform sensor sizes, shoudl change all to geom_poly
+# legend for plots
+# load_footscan function
 
 # data list:
 ## Array. pressure data
@@ -27,13 +29,6 @@
 ## Numeric. Single number time between
 ## List. Mask list
 ## events (for example, to define start/end of individual steps for insole data)
-
-
-# =============================================================================
-
-# Packages required
-#library(rgeos)
-#library(zoo)
 
 
 # =============================================================================
@@ -56,6 +51,7 @@
 #' @examples
 #' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' @importFrom stringr str_extract_all str_detect
+#' @importFrom utils read.fwf read.table
 #' @export
 
 load_emed <- function(pressure_filepath) {
@@ -189,7 +185,8 @@ load_emed <- function(pressure_filepath) {
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_data = load_pedar("inst/extdata/pedar_example.asc")
+#' pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
+#' pressure_data <- load_pedar("inst/extdata/3DI_S001_V1_DC_1.asc")
 #' @importFrom stringr str_split str_trim
 #' @export
 
@@ -408,38 +405,27 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   \item events. List
 #'   }
 #' @examples
-#' select_steps(pressure_data)
+#' pressure_data <- select_steps(pressure_data)
 #' @importFrom ggplot2 ggplot aes geom_line xlab ylab ggtitle
 #' @importFrom magrittr "%>%"
 #' @importFrom dplyr filter
+#' @importFrom utils menu
 #' @export
 
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 10,
                           steps_Rn = 5, steps_Ln = 5, skip = 2) {
   # check session is interactive
-  if (interactive == FALSE)
+  if (interactive() == FALSE)
     stop("user needs to select suitable steps")
 
   # check this is pedar (or other suitable) data
   if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
     stop("data should be from pedar or f-scan")
 
-  # if pedar, get insole size
-  pedar_insole_type <- pressure_data[[3]]
-
-  # Read in required pedar sensor areas (imported in mm^2 but adjust for kPa)
-  load("data/pedar_insole_areas.rda")
-  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
-
-  # Convert pressure data to force data (R & L)
-  dims <- dim(pressure_data[[1]])
-  force_R_mat <- matrix(pressure_data[[1]][1, , ],
-                        dims[2], dims[3]) * pedarSensorAreas
-  force_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
-                        dims[2], dims[3]) * pedarSensorAreas
-  force_R <- colSums(force_R_mat)
-  force_L <- colSums(force_L_mat)
+  # make force vectors
+  force_R <- force_pedar(pressure_data, "right")
+  force_L <- force_pedar(pressure_data, "left")
 
   # Adjust thresholds to avoid errors
   threshold_R <- threshold_R + 0.01
@@ -512,7 +498,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
     g <- g + xlab("Frame no") + ylab("Force (N)")
     g <- g + ggtitle(paste0("Right step ", stp))
     print(g)
-    Sys.sleep(2.5)
+    Sys.sleep(1.5)
 
     # get user to approve or reject step
     resp <- menu(c("Y", "N"),
@@ -540,15 +526,15 @@ select_steps <- function (pressure_data, threshold_R = 20,
     g <- g + xlab("Frame no") + ylab("Force (N)")
     g <- g + ggtitle(paste0("Left step ", stp))
     print(g)
-    Sys.sleep(2.5)
+    Sys.sleep(1.5)
 
     # get user to approve or reject step
     resp <- menu(c("Y", "N"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    include_stps_L <- c(include_stps_R, resp)
+    include_stps_L <- c(include_stps_L, resp)
 
     # check if number of steps has been reached
-    if (sum(include_stps_R == 1) >= steps_Rn) {break}
+    if (sum(include_stps_L == 1) >= steps_Ln) {break}
   }
 
   # make events df
@@ -656,28 +642,35 @@ auto_detect_side <- function(pressure_data) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data. List. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
+#' @param side For insole data only
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' force_curve(pressure_data, plot = TRUE)
+#' force_curve(pressure_data, side = "left", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
-force_curve <- function(pressure_data, plot = FALSE) {
+force_curve <- function(pressure_data, side, plot = FALSE) {
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
+  if(pressure_data[[2]] == "pedar" & missing(side) == TRUE)
+    stop("insole data needs to have side")
 
   # convert to force
-  sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
-  force_array <- pressure_data[[1]] * sens_area * 1000
+  if (pressure_data[[2]] == "pedar") {
+    force <- force_pedar(pressure_data, side)
+  } else {
+    sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+    force_array <- pressure_data[[1]] * sens_area * 1000
 
-  # create empty vector
-  force <- rep(NA, times = dim(force_array)[3])
+    # create empty vector
+    force <- rep(NA, times = dim(force_array)[3])
 
-  # find total force for each frame and store in vector
-  for (i in 1:dim(force_array)[3]) {
-    force[i] <- sum(force_array[, , i])
+    # find total force for each frame and store in vector
+    for (i in 1:dim(force_array)[3]) {
+      force[i] <- sum(force_array[, , i])
+    }
   }
 
   # plot, if required
@@ -952,7 +945,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @examples
 #' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
-#' @importFrom ggplot2 ggplot aes geom_raster
+#' @importFrom ggplot2 ggplot aes geom_raster geom_polygon scale_fill_manual
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
@@ -963,40 +956,23 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure data must contain array")
 
+  # if pedar
+
   # get footprint
   fp <- footprint(pressure_data, variable = variable)
-  fp_rows <- nrow(fp)
-  fp_cols <- ncol(fp)
-
-  # interpolate if required
-  if (smooth == TRUE) {
-    f_print2 <- matrix(rep(NA, (fp_rows * fp_cols * 5)),
-                       nrow = fp_rows, fp_cols * 5)
-    for (i in 1:nrow(fp)) {
-      xa <- approx(fp[i, ], n = 5 * fp_cols)
-      f_print2[i, ] <- xa$y
-    }
-
-    # Increase number of rows
-    f_print3 <- matrix(rep(NA, fp_rows * 5 * fp_cols * 5),
-                       nrow = fp_rows * 5, fp_cols * 5)
-    for (i in 1:ncol(f_print2)) {
-      xa <- approx(f_print2[ ,i], n = 5 * nrow(f_print2))
-      f_print3[ ,i] <- xa$y
-    }
-    fp <- f_print3
-  }
+  fp <- as.vector(fp)
+  fp <- fp[fp > 0]
 
   # generate coordinates for each sensor
-  sens_coords <- sensor_coords(pressure_data, "all")
-
-  # overall dimensions of array
-  dims <- dim(pressure_data[[1]])
+  sens_poly <- sensor_2_polygon(pressure_data, output = "df")
+  x <- sensor_coords(pressure_data)
 
   # combine with pressure values
-  cor <- cbind(sens_coords, as.vector(fp))
-  cor <- as.data.frame(cor)
-  colnames(cor) <- c("x", "y", "value")
+  ids <- c(1:length(as.vector(fp)))
+  vals <- data.frame(id = ids, value = as.vector(fp))
+
+  # merge value and coordinate frames
+  cor <- merge(sens_poly, vals, by = c("id"))
 
   # add colors
   cor <- generate_colors(cor, col_type = plot_colors, break_values,
@@ -1008,7 +984,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   ## plot
   g <- ggplot()
-  g <- g + geom_raster(data = cor, aes(x = x, y = y, fill = cols))
+  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols))
   g <- g + scale_fill_manual(values = break_colors)
   g <- g + scale_x_continuous(expand = c(0, 0))
   g <- g + scale_y_continuous(expand = c(0, 0))
@@ -2308,7 +2284,7 @@ sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
   coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
 
   # remove inactive sensors
-  P <- c(sens)
+  P <- as.vector(sens)
   coords <- coords[which(P > 0), ]
 
   # return sensor coordinates
@@ -2409,8 +2385,13 @@ masks_2_df <- function(masks) {
 
 
 #" rectilinear sensor array to polygon
+#' @param output String. "df" dataframe for plotting or "sf" shape poly for analysis
 #' @noRd
-sensor_2_polygon <- function(sens_coords, pressure_data) {
+sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
+                             output = "sf") {
+  # sensor coordinates
+  sens_coords <- sensor_coords(pressure_data, pressure_image)
+
   # sensor dimensions
   width <- pressure_data[[3]][1]
   height <- pressure_data[[3]][2]
@@ -2430,8 +2411,25 @@ sensor_2_polygon <- function(sens_coords, pressure_data) {
                                                       y1, y2, y3, y4, y1), 5, 2)))
   }
 
+  if (output == "df") {
+    id_df <- data.frame(x = double(),
+                        y = double(),
+                        z = integer())
+    # make into identity df
+    for (i in 1:length(sens_polygons)) {
+      mat <- st_coordinates(sens_polygons[[i]])[, c(1, 2)]
+      #mat_df <- data.frame(mat[1:(nrow(mat) - 1), ])
+      mat_df <- data.frame(mat)
+      id <- rep(i, length.out = nrow(mat_df))
+      mat_df <- cbind(mat_df, id)
+      colnames(mat_df) <- c("x", "y", "id")
+      id_df <- rbind(id_df, mat_df)
+    }
+  }
+
   # return
-  return(sens_polygons)
+  if (output == "sf") {return(sens_polygons)}
+  if (output == "df") {return(id_df)}
 }
 
 
@@ -2455,44 +2453,40 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   start_end_R <- pressure_data[[6]]
   start_end_L <- pressure_data[[6]]
 
+  # get max values from each sensor
   R_Mean_max <- apply(pressure_R_mat, 1, max)
   L_Mean_max <- apply(pressure_L_mat, 1, max)
   Mean_max <- c(L_Mean_max, R_Mean_max)
 
+  # make ids
   ids <- c()
   for (i in 1:99) {ids = append(ids, paste0("L", i))}
   for (i in 1:99) {ids = append(ids, paste0("R", i))}
 
+  # make df
   df <- data.frame(id = ids, value = Mean_max)
 
+  # add coordinates to df
   xs <- c()
   for (i in c(101:199, 1:99)) {
     for (j in c(1, 3, 5, 7)) {xs = append(xs, pedar_insole_grid[i, j])}
   }
-
   ys <- c()
   for (i in c(101:199, 1:99)) {
-    for (j in c(2, 4, 6, 8)) {xs = append(xs, pedar_insole_grid[i, j])}
+    for (j in c(2, 4, 6, 8)) {ys = append(ys, pedar_insole_grid[i, j])}
   }
-
   position <- data.frame(id = rep(ids, each = 4), x = xs, y = ys)
   df <- merge(df, position, by = c("id"))
 
   # add color
-  df <- df %>% mutate(col = case_when(value >= 0 & value < 40 ~ "grey",
-                                      value >= 0 & value < 60 ~ "lightblue",
-                                      value >= 60 & value < 100 ~ "darkblue",
-                                      value >= 100 & value < 150 ~ "green",
-                                      value >= 150 & value < 220 ~ "yellow",
-                                      value >= 220 & value < 300 ~ "red",
-                                      value >= 300 ~ "pink"))
+  df <- generate_colors(df)
 
   # plot
-  p <- ggplot(df, aes(x = x, y = y, group = id))
-  p <- p + geom_polygon(fill = df$col, color = "black")
-  p <- p + coord_fixed()
-  p <- p + theme_blank()
-  print(p)
+  g <- ggplot(df, aes(x = x, y = y, group = id))
+  g <- g + geom_polygon(fill = df$col, color = "black")
+  g <- g + coord_fixed()
+  g <- g + theme_blank()
+  print(g)
 }
 
 #' @param break_values Vector. Vector with break values to be used. Should be one
@@ -2502,6 +2496,31 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
 #' @param col_type Character. "default": novel color scheme; "custom": user
 #' supplied
 #' @noRd
+
+#' pedar force
+force_pedar <- function(pressure_data, side) {
+  # check this is pedar data
+  if (pressure_data[[2]] != "pedar")
+    stop("must be pedar data")
+
+  # get insole sizing
+  pedar_insole_type <- pressure_data[[3]]
+
+  # get pedar sensor areas
+  load("data/pedar_insole_areas.rda")
+  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
+
+  # change array direction
+  force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
+
+  # calculate force
+  if (side == "right") {force_array <- force_array[, , 1] * pedarSensorAreas}
+  if (side == "left") {force_array <- force_array[, , 2] * pedarSensorAreas}
+  force <- rowSums(force_array)
+}
+
+
+#' generate colors
 generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
   if (col_type == "default") {

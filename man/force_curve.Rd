@@ -4,9 +4,11 @@
 \alias{force_curve}
 \title{Force curve}
 \usage{
-force_curve(pressure_data, plot = FALSE)
+force_curve(pressure_data, side, plot = FALSE)
 }
 \arguments{
+\item{side}{For insole data only}
+
 \item{plot}{Logical. If TRUE also plots data as line curve}
 
 \item{pressure_data.}{List. A 3D array covering each timepoint of the
@@ -19,7 +21,7 @@ Numeric vector containing force values
 Generates force vector with option to plot
 }
 \examples{
-force_curve(pressure_data, plot = TRUE)
+force_curve(pressure_data, side = "left", plot = TRUE)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

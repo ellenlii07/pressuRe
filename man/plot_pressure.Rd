@@ -11,6 +11,9 @@ plot_pressure(
   frame,
   plot_COP = FALSE,
   plot_outline = FALSE,
+  plot_colors = "default",
+  break_values,
+  break_colors,
   plot = TRUE
 )
 }
@@ -31,6 +34,15 @@ increase data density}
 
 \item{plot_outline}{Logical. If TRUE, overlay convex hull outline on plot}
 
+\item{plot_colors}{Character. "default": novel color scheme; "custom": user
+supplied}
+
+\item{break_values}{Vector. If plot_colors is "custom", values to split
+colors at}
+
+\item{break_colors}{Vector. If plot_colors is "custom", colors to use.
+Should be one shorter than break_values}
+
 \item{plot}{Logical. If TRUE, plot will be displayed}
 }
 \value{
@@ -40,6 +52,7 @@ ggplot plot object
 Produce plot of pressure data
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 }
 \author{

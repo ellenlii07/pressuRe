@@ -4,7 +4,7 @@
 \alias{plot_pedar}
 \title{plot pedar}
 \usage{
-plot_pedar(pressure_data, pressure_image = "step", step_n)
+plot_pedar(pressure_data, pressure_image = "step_max", step_n)
 }
 \description{
 plot pedar

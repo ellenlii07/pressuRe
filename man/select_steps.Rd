@@ -49,5 +49,5 @@ and not representative of steady state walking so this removes them}
 Select steps, usually from insole data, and format for analysis
 }
 \examples{
-select_steps(pressure_data)
+pressure_data <- select_steps(pressure_data)
 }
