@@ -21,6 +21,7 @@ Get outline of pressure region
 Determine outline (convex hull) of pressure measurement
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 pressure_outline(pressure_data)
 pressure_outline(pressure_data, frame = 50)
 }

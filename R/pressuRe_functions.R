@@ -1,12 +1,11 @@
 # to do
 # pti to pressure curve function
-# option to choose different colors in plot_pressure
+# option to choose different colors in animate pressure
 # fscan import function
 # rewrite CPEI
 # more output variables need to be added to  mask analysis
-# edit mask functionality using identity
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
-# allow for multiple masking schemes
+# more automasking schemes (pedar especially)
 # change footprint function name to more generic name?
 # Do we have all pedar insoles? Double check areas
 # area curve (and others) to work with insole data
@@ -14,17 +13,18 @@
 # can load-iscan be made more generic?
 # add support for pliance
 # edit mask needs to be written
-# global pressure_import function (leave for V2)
 # document pedar insole size data and grid data
 # add more input tests to throw errors
 # update color in animate function
 # geom raster doesn't work with non-uniform sensor sizes, shoudl change all to geom_poly
 # legend for plots
 # load_footscan function
+# global pressure_import function (leave for V2)
+# cop for pedar
 
 # data list:
 ## Array. pressure data
-## Character string. data type (usually collection system, e.g. emed)
+## String. data type (usually collection system, e.g. emed)
 ## Numeric. sens_size. sensor size
 ## Numeric. Single number time between
 ## List. Mask list
@@ -42,7 +42,7 @@
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. Character defining pressure system
+#'   \item pressure_system. String defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
@@ -91,6 +91,7 @@ load_emed <- function(pressure_filepath) {
   if (length(MVP) > 0 | length(MPP) > 0) {
     breaks <- breaks[1:(min(c(MVP, MPP)) - 1)]
   }
+  breaks <- breaks[str_detect(frame_type, "Pict")]
 
   # get blank lines
   ends <- which(pressure_raw == "\x0C")
@@ -178,7 +179,7 @@ load_emed <- function(pressure_filepath) {
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. Character defining pressure system
+#'   \item pressure_system. String defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
@@ -243,7 +244,7 @@ load_pedar <- function(pressure_filepath) {
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. Character defining pressure system
+#'   \item pressure_system. String defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
@@ -334,14 +335,15 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. Character defining pressure system
+#'   \item pressure_system. String defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_interp(pressure_data, interp_to = 101)
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' pressure_data <- pressure_interp(pressure_data, interp_to = 101)
 #' @export
 
 pressure_interp <- function(pressure_data, interp_to) {
@@ -398,13 +400,14 @@ pressure_interp <- function(pressure_data, interp_to) {
 #' \itemize{
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
-#'   \item pressure_system. Character defining pressure system
+#'   \item pressure_system. String defining pressure system
 #'   \item sens_size. Numeric vector with the dimensions of the sensors
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
 #'   \item events. List
 #'   }
 #' @examples
+#' pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
 #' pressure_data <- select_steps(pressure_data)
 #' @importFrom ggplot2 ggplot aes geom_line xlab ylab ggtitle
 #' @importFrom magrittr "%>%"
@@ -564,6 +567,7 @@ select_steps <- function (pressure_data, threshold_R = 20,
 #' timepoint of the measurement. z dimension represents time
 #' @return String. "LEFT" or "RIGHT"
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' auto_detect_side(pressure_data)
 #' @importFrom sf st_polygon st_as_sf st_convex_hull st_combine st_intersection st_area
 #' @export
@@ -646,6 +650,7 @@ auto_detect_side <- function(pressure_data) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' force_curve(pressure_data, side = "left", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
@@ -704,6 +709,7 @@ force_curve <- function(pressure_data, side, plot = FALSE) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
@@ -765,6 +771,7 @@ pressure_curve <- function(pressure_frames, variable = "peak",
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' area_curve(pressure_data, plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
@@ -819,6 +826,7 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 #' of the measurement. z dimension represents time
 #' @return Data frame with x and y coordinates of COP throughout trial
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' cop(pressure_data)
 #' @export
 
@@ -886,7 +894,9 @@ cop <- function(pressure_data) {
 #' @param plot Logical. Display pressure image
 #' @return Matrix. Maximum or mean values for all sensors
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' footprint(pressure_data, plot = TRUE)
+#' @export
 
 footprint <- function(pressure_data, variable = "max", frame,
                       plot = FALSE) {
@@ -934,7 +944,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' increase data density
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
 #' @param plot_outline Logical. If TRUE, overlay convex hull outline on plot
-#' @param plot_colors Character. "default": novel color scheme; "custom": user
+#' @param plot_colors String. "default": novel color scheme; "custom": user
 #' supplied
 #' @param break_values Vector. If plot_colors is "custom", values to split
 #' colors at
@@ -946,6 +956,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 #' @importFrom ggplot2 ggplot aes geom_raster geom_polygon scale_fill_manual
+#' theme
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
@@ -965,7 +976,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # generate coordinates for each sensor
   sens_poly <- sensor_2_polygon(pressure_data, output = "df")
-  x <- sensor_coords(pressure_data)
 
   # combine with pressure values
   ids <- c(1:length(as.vector(fp)))
@@ -984,7 +994,8 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   ## plot
   g <- ggplot()
-  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols))
+  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols),
+                        color = NA)
   g <- g + scale_fill_manual(values = break_colors)
   g <- g + scale_x_continuous(expand = c(0, 0))
   g <- g + scale_y_continuous(expand = c(0, 0))
@@ -1006,7 +1017,10 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   }
 
   # formatting
-  g <- g + theme_void() + theme(legend.position = "none")
+  g <- g + theme_void()
+  g <- g + theme(panel.background = element_rect(fill = "white",
+                                                 colour = "white"),
+                 legend.position = "none")
 
   # display plot immediately if requested
   if (plot == TRUE) {print(g)}
@@ -1026,6 +1040,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @param frame Integer. Frame number to use
 #' @return Polygon. sfg object representing convex hull outline
 #' @examples
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' pressure_outline(pressure_data)
 #' pressure_outline(pressure_data, frame = 50)
 #' @importFrom magrittr "%>%"
@@ -1069,80 +1084,78 @@ pressure_outline <- function(pressure_data, frame) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
+#' @param plot_colors String
 #' @param fps Numeric. Number of frames per second in animation
 #' @param file Name (inlcuding path) of export file
 #' @param preview Logical. Whether to play the animation
 #' @return Animation in gif format
 #' @examples
-#' animate_pressure(pressure_data, fps = 10, "testgif.gif")
+#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' animate_pressure(pressure_data, fps = 10, filename = "testgif2.gif")
 #' @importFrom stringr str_ends
 #' @importFrom magick image_graph image_animate image_write
+#' @importFrom ggplot2 ggplot aes geom_polygon scale_x_continuous
+#' scale_y_continuous coord_fixed theme_void
+#' @importFrom grDevices dev.off
 #' @export
 
-animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
+animate_pressure <- function(pressure_data, plot_colors = "default", fps,
+                             filename, preview = FALSE) {
   # parameter check
   if (str_ends(filename, ".gif") == FALSE)
     stop("filename must end in .gif")
 
   # colours
-  plot_cs <- list(cs_breaks = c(0, 15, 40, 60, 100, 150, 220, 300, 5000),
-                  cs_cols = c("white", "grey", "blue", "light blue",
-                                     "green", "yellow", "red", "deeppink"))
-                                     cols <- unlist(plot_cs[[2]])
-
-  # generate dataframe with coords for each frame (helper function)
-  press_df <- function(pressure_data, frame) {
-    # generate coordinates for each sensor
-    sens_coords <- sensor_coords(pressure_data)
-
-    # combine with pressure values
-    dims <- dim(pressure_data[[1]])
-    P <- c(footprint(pressure_data, "frame", frame))
-    cor <- cbind(sens_coords, P)
-    cor <- as.data.frame(cor)
-    colnames(cor) <- c("x", "y", "value")
-
-    # add colours
-    colour <- c()
-    plot_cs <- list(cs_breaks = c(0, 15, 40, 60, 100, 150, 220, 300, 5000),
-                    cs_cols = c("white", "grey", "blue", "light blue",
-                                "green", "yellow", "red", "deeppink"))
-    cols <- unlist(plot_cs[[2]])
-    colour <- c()
-    for (i in 1:(dims[1] * dims[2])) {
-      for (j in seq_along(plot_cs[[1]])) {
-        if(cor$value[i] >= plot_cs[[1]][j] & cor$value[i] < plot_cs[[1]][j + 1]) {
-          colour = append(colour, j)
-        }
-      }
-    }
-
-    # combine with data frame
-    cor <- cbind(cor, colour)
-
-    # return
-    return(cor)
+  if (plot_colors == "default") {
+    break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow",
+                      "red", "pink")
   }
 
   # plot
   img <- magick::image_graph(600, 340, res = 96)
   for (i in 1:dim(pressure_data[[1]])[3]) {
-    df <- press_df(pressure_data, i)
-    g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour)))
-    g <- g + geom_raster()
-    g <- g + scale_fill_manual(values = cols)
+    # polygon coords
+    cor <- sensor_2_polygon(pressure_data, pressure_image = "frame", frame = i,
+                            output = "df")
+
+    # combine with pressure values
+    fp <- footprint(pressure_data, "frame", i)
+    fp <- as.vector(fp)
+    fp <- fp[fp > 0]
+    ids <- c(1:length(as.vector(fp)))
+    vals <- data.frame(id = ids, value = as.vector(fp))
+
+    # merge value and coordinate frames
+    cor <- merge(cor, vals, by = c("id"))
+
+    # add colors
+    cor <- generate_colors(cor, col_type = plot_colors, break_values,
+                           break_colors)
+
+    #df <- press_df(pressure_data, i)
+    g <- ggplot()
+    g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols))
+    g <- g + scale_fill_manual(values = break_colors)
     g <- g + scale_x_continuous(expand = c(0, 0))
     g <- g + scale_y_continuous(expand = c(0, 0))
     g <- g + coord_fixed()
-    g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
-                   axis.text.y = element_blank(), axis.ticks = element_blank(),
-                   axis.title.x = element_blank(),
-                   axis.title.y = element_blank(),
-                   panel.background = element_blank(),
-                   panel.border = element_blank(),
-                   panel.grid.major = element_blank(),
-                   panel.grid.minor = element_blank(),
-                   legend.position = "none")
+    g <- g + theme_void()
+
+    #g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour)))
+    #g <- g + geom_polygon()
+    #g <- g + scale_fill_manual(values = cols)
+    #g <- g + scale_x_continuous(expand = c(0, 0))
+    #g <- g + scale_y_continuous(expand = c(0, 0))
+    #g <- g + coord_fixed()
+    #g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
+    #               axis.text.y = element_blank(), axis.ticks = element_blank(),
+    #               axis.title.x = element_blank(),
+    #               axis.title.y = element_blank(),
+    #               panel.background = element_blank(),
+    #               panel.border = element_blank(),
+    #               panel.grid.major = element_blank(),
+    #               panel.grid.minor = element_blank(),
+    #               legend.position = "none")
     print(g)
   }
 
@@ -1168,7 +1181,7 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
-#' @param foot_side Character. "RIGHT", "LEFT", or "auto". Auto uses
+#' @param foot_side String. "RIGHT", "LEFT", or "auto". Auto uses
 #' auto_detect_side function
 #' @param sens Numeric. Number of frames per second in animation
 #' @param plot Logical. Whether to play the animation
@@ -1177,6 +1190,7 @@ animate_pressure <- function(pressure_data, fps, filename, preview = FALSE) {
 #' pressure_data <- load_emed("inst/extdata/emed_test.lst")
 #' masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
 #' @importFrom zoo rollapply
+#' @importFrom rgeos gBuffer
 #' @export
 
 automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
@@ -2243,55 +2257,6 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
 # helper functions
 
-#' @title Get coordinates of active sensors
-#' @description Produces a data frame with coordinates of sensors
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. Includes a 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
-#' @param pressure_image. Character. Which pressure image to use. Options are
-#' "all_active", "all", or "frame".
-#' @param frame Numeric. If pressure image is frame, the numeric value should be
-#' provided here
-#' @return Data frame. x and y coordinates of sensors
-#' @examples
-#' coords <- sensor_coords(pressure_data)
-#' @noRd
-
-sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
-  # pressure image
-  if (pressure_image == "all_active") {
-    sens <- footprint(pressure_data, variable = "max")
-  }
-  if (pressure_image == "all") {
-    dims <- dim(pressure_data[[1]])
-    sens <- matrix(rep(10, length.out = dims[1] * dims[2]), nrow = dims[1],
-                   ncol = dims[2])
-  }
-  if (pressure_image == "frame") {
-    sens <- footprint(pressure_data, variable = "frame", frame = frame)
-  }
-
-  # dimensions
-  sens_x <- pressure_data[[3]][1]
-  sens_y <- pressure_data[[3]][2]
-
-  # data frame with active sensors as coordinates
-  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(sens))
-  x_cor <- rep(x_cor, each = nrow(sens))
-  y_cor <- seq(from = (sens_y / 2) + ((nrow(sens) - 1) * sens_y),
-               by = (-1 * sens_y), length.out = nrow(sens))
-  y_cor <- rep(y_cor, times = ncol(sens))
-  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
-
-  # remove inactive sensors
-  P <- as.vector(sens)
-  coords <- coords[which(P > 0), ]
-
-  # return sensor coordinates
-  return(coords)
-}
-
-
 #' interpolation function
 #' @importFrom stats approx
 #' @noRd
@@ -2383,14 +2348,64 @@ masks_2_df <- function(masks) {
   return(df)
 }
 
+#' @title Get coordinates of active sensors
+#' @description Produces a data frame with coordinates of sensors
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @param pressure_image. String. Which pressure image to use. Options are
+#' "all_active", "all", or "frame".
+#' @param frame Numeric. If pressure image is frame, the numeric value should be
+#' provided here
+#' @return Data frame. x and y coordinates of sensors
+#' @examples
+#' coords <- sensor_coords(pressure_data)
+#' @noRd
+
+sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
+  # pressure image
+  if (pressure_image == "all_active") {
+    sens <- footprint(pressure_data, variable = "max")
+  }
+  if (pressure_image == "all") {
+    dims <- dim(pressure_data[[1]])
+    sens <- matrix(rep(10, length.out = dims[1] * dims[2]), nrow = dims[1],
+                   ncol = dims[2])
+  }
+  if (pressure_image == "frame") {
+    sens <- footprint(pressure_data, variable = "frame", frame = frame)
+  }
+
+  # dimensions
+  sens_x <- pressure_data[[3]][1]
+  sens_y <- pressure_data[[3]][2]
+
+  # data frame with active sensors as coordinates
+  x_cor <- seq(from = sens_x / 2, by = sens_x, length.out = ncol(sens))
+  x_cor <- rep(x_cor, each = nrow(sens))
+  y_cor <- seq(from = (sens_y / 2) + ((nrow(sens) - 1) * sens_y),
+               by = (-1 * sens_y), length.out = nrow(sens))
+  y_cor <- rep(y_cor, times = ncol(sens))
+  coords <- data.frame(x_coord = x_cor, y_coord = y_cor)
+
+  # remove inactive sensors
+  P <- as.vector(sens)
+  coords <- coords[which(P > 0), ]
+
+  # return sensor coordinates
+  return(coords)
+}
+
+
 
 #" rectilinear sensor array to polygon
 #' @param output String. "df" dataframe for plotting or "sf" shape poly for analysis
+#' @importFrom sf st_polygon st_coordinates
 #' @noRd
-sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
+sensor_2_polygon <- function(pressure_data, pressure_image = "all_active", frame = NA,
                              output = "sf") {
   # sensor coordinates
-  sens_coords <- sensor_coords(pressure_data, pressure_image)
+  sens_coords <- sensor_coords(pressure_data, pressure_image, frame)
 
   # sensor dimensions
   width <- pressure_data[[3]][1]
@@ -2485,7 +2500,7 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   g <- ggplot(df, aes(x = x, y = y, group = id))
   g <- g + geom_polygon(fill = df$col, color = "black")
   g <- g + coord_fixed()
-  g <- g + theme_blank()
+  g <- g + theme_void()
   print(g)
 }
 
@@ -2493,11 +2508,13 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
 #' shorter than break_values
 #' @param break_colors Vector. Vector with colors to be used. Should be one
 #' longer than break_values
-#' @param col_type Character. "default": novel color scheme; "custom": user
+#' @param col_type String. "default": novel color scheme; "custom": user
 #' supplied
 #' @noRd
 
+
 #' pedar force
+#' @param pressure_data
 force_pedar <- function(pressure_data, side) {
   # check this is pedar data
   if (pressure_data[[2]] != "pedar")

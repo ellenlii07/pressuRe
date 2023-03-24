@@ -10,7 +10,7 @@ automask(pressure_data, foot_side, sens = 4, plot = FALSE)
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement. z dimension represents time}
 
-\item{foot_side}{Character. "RIGHT", "LEFT", or "auto". Auto uses
+\item{foot_side}{String. "RIGHT", "LEFT", or "auto". Auto uses
 auto_detect_side function}
 
 \item{sens}{Numeric. Number of frames per second in animation}

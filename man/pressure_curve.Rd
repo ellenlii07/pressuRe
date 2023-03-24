@@ -21,6 +21,7 @@ Numeric vector containing force values
 Generate pressure curve with option to plot
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 pressure_curve(pressure_data, variable = "peak", plot = TRUE)
 }
 \author{

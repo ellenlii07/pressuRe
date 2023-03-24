@@ -22,6 +22,7 @@ Numeric vector containing force values
 Generate contact area curve with option to plot
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 area_curve(pressure_data, plot = TRUE)
 }
 \author{

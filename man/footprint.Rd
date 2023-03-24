@@ -25,6 +25,7 @@ Matrix. Maximum or mean values for all sensors
 Find footprint of pressure file
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 footprint(pressure_data, plot = TRUE)
 }
 \author{

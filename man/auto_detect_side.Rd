@@ -19,6 +19,7 @@ right), usually would only be needed for pressure plate data. Generally
 seems to work but may be thrown off by severe deformities
 }
 \examples{
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
 auto_detect_side(pressure_data)
 }
 \author{

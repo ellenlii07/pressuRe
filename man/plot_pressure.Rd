@@ -34,7 +34,7 @@ increase data density}
 
 \item{plot_outline}{Logical. If TRUE, overlay convex hull outline on plot}
 
-\item{plot_colors}{Character. "default": novel color scheme; "custom": user
+\item{plot_colors}{String. "default": novel color scheme; "custom": user
 supplied}
 
 \item{break_values}{Vector. If plot_colors is "custom", values to split

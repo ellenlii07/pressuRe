@@ -4,11 +4,19 @@
 \alias{animate_pressure}
 \title{Animate pressure}
 \usage{
-animate_pressure(pressure_data, fps, filename, preview = FALSE)
+animate_pressure(
+  pressure_data,
+  plot_colors = "default",
+  fps,
+  filename,
+  preview = FALSE
+)
 }
 \arguments{
 \item{pressure_data}{Array. A 3D array covering each timepoint of the
 measurement. z dimension represents time}
+
+\item{plot_colors}{String}
 
 \item{fps}{Numeric. Number of frames per second in animation}
 
@@ -23,7 +31,8 @@ Animation in gif format
 Produce animation (gif) of pressure distribution
 }
 \examples{
-animate_pressure(pressure_data, fps = 10, "testgif.gif")
+pressure_data <- load_emed("inst/extdata/emed_test.lst")
+animate_pressure(pressure_data, fps = 10, filename = "testgif2.gif")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -38,7 +38,7 @@ and not representative of steady state walking so this removes them}
 \itemize{
   \item pressure_array. 3D array covering each timepoint of the measurement.
            z dimension represents time
-  \item pressure_system. Character defining pressure system
+  \item pressure_system. String defining pressure system
   \item sens_size. Numeric vector with the dimensions of the sensors
   \item time. Numeric value for time between measurements
   \item masks. List
@@ -49,5 +49,6 @@ and not representative of steady state walking so this removes them}
 Select steps, usually from insole data, and format for analysis
 }
 \examples{
+pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
 pressure_data <- select_steps(pressure_data)
 }
