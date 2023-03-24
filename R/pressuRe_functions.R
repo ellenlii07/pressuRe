@@ -13,14 +13,12 @@
 # can load-iscan be made more generic?
 # add support for pliance
 # edit mask needs to be written
-# document pedar insole size data and grid data
 # add more input tests to throw errors
-# update color in animate function
-# geom raster doesn't work with non-uniform sensor sizes, shoudl change all to geom_poly
 # legend for plots
 # load_footscan function
 # global pressure_import function (leave for V2)
 # cop for pedar
+# add progress bar for animation
 
 # data list:
 ## Array. pressure data
@@ -1095,7 +1093,7 @@ pressure_outline <- function(pressure_data, frame) {
 #' @importFrom stringr str_ends
 #' @importFrom magick image_graph image_animate image_write
 #' @importFrom ggplot2 ggplot aes geom_polygon scale_x_continuous
-#' scale_y_continuous coord_fixed theme_void
+#' scale_y_continuous coord_fixed theme_void xlim ylim
 #' @importFrom grDevices dev.off
 #' @export
 
@@ -1110,6 +1108,13 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
     break_colors <- c("white", "grey","lightblue", "darkblue","green","yellow",
                       "red", "pink")
   }
+
+  # max size of df
+  fp_max <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
+                             output = "df")
+  x_lim <- max(fp_max$x)
+  y_lim <- max(fp_max$y)
+
 
   # plot
   img <- magick::image_graph(600, 340, res = 96)
@@ -1132,31 +1137,18 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
     cor <- generate_colors(cor, col_type = plot_colors, break_values,
                            break_colors)
 
-    #df <- press_df(pressure_data, i)
+    # make plots
     g <- ggplot()
     g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols))
     g <- g + scale_fill_manual(values = break_colors)
-    g <- g + scale_x_continuous(expand = c(0, 0))
-    g <- g + scale_y_continuous(expand = c(0, 0))
-    g <- g + coord_fixed()
+    g <- g + scale_x_continuous(expand = c(0, 0), limits = c(0, x_lim))
+    g <- g + scale_y_continuous(expand = c(0, 0), limits = c(0, y_lim))
+    #g <- g + coord_fixed() + xlim(c(0, x_lim)) #+ ylim(c(0, y_lim))
     g <- g + theme_void()
 
-    #g <- ggplot(df, aes(x = x, y = y, fill = as.factor(colour)))
-    #g <- g + geom_polygon()
-    #g <- g + scale_fill_manual(values = cols)
-    #g <- g + scale_x_continuous(expand = c(0, 0))
-    #g <- g + scale_y_continuous(expand = c(0, 0))
-    #g <- g + coord_fixed()
-    #g <- g + theme(axis.line = element_blank(), axis.text.x = element_blank(),
-    #               axis.text.y = element_blank(), axis.ticks = element_blank(),
-    #               axis.title.x = element_blank(),
-    #               axis.title.y = element_blank(),
-    #               panel.background = element_blank(),
-    #               panel.border = element_blank(),
-    #               panel.grid.major = element_blank(),
-    #               panel.grid.minor = element_blank(),
-    #               legend.position = "none")
     print(g)
+    print(i)
+    gc()
   }
 
   # turn off device and clean up data
@@ -1171,6 +1163,8 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
   # preview if required
   if (preview == TRUE) {print(animation)}
+
+  on.exit(par(old.par))
 }
 
 
@@ -2447,6 +2441,28 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active", frame
   if (output == "df") {return(id_df)}
 }
 
+#' pedar force
+#' @param pressure_data List.
+force_pedar <- function(pressure_data, side) {
+  # check this is pedar data
+  if (pressure_data[[2]] != "pedar")
+    stop("must be pedar data")
+
+  # get insole sizing
+  pedar_insole_type <- pressure_data[[3]]
+
+  # get pedar sensor areas
+  load("data/pedar_insole_areas.rda")
+  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
+
+  # change array direction
+  force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
+
+  # calculate force
+  if (side == "right") {force_array <- force_array[, , 1] * pedarSensorAreas}
+  if (side == "left") {force_array <- force_array[, , 2] * pedarSensorAreas}
+  force <- rowSums(force_array)
+}
 
 #' plot pedar
 plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
@@ -2504,40 +2520,18 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   print(g)
 }
 
+
+#' @title Generate colors
+#' @description Let's the user prescribe the color scale for plots
 #' @param break_values Vector. Vector with break values to be used. Should be one
 #' shorter than break_values
 #' @param break_colors Vector. Vector with colors to be used. Should be one
 #' longer than break_values
 #' @param col_type String. "default": novel color scheme; "custom": user
 #' supplied
+#' @export
 #' @noRd
 
-
-#' pedar force
-#' @param pressure_data
-force_pedar <- function(pressure_data, side) {
-  # check this is pedar data
-  if (pressure_data[[2]] != "pedar")
-    stop("must be pedar data")
-
-  # get insole sizing
-  pedar_insole_type <- pressure_data[[3]]
-
-  # get pedar sensor areas
-  load("data/pedar_insole_areas.rda")
-  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
-
-  # change array direction
-  force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
-
-  # calculate force
-  if (side == "right") {force_array <- force_array[, , 1] * pedarSensorAreas}
-  if (side == "left") {force_array <- force_array[, , 2] * pedarSensorAreas}
-  force <- rowSums(force_array)
-}
-
-
-#' generate colors
 generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
   if (col_type == "default") {
