@@ -4,16 +4,16 @@
 \alias{cpei}
 \title{CPEI}
 \usage{
-cpei(pressure_data, side, plot_result = FALSE)
+cpei(pressure_data, foot_side, plot_result = FALSE)
 }
 \arguments{
+\item{foot_side}{String. "right" or "left". Required for automatic detection of
+points}
+
 \item{plot_result}{Logical. Plots pressure image with COP and CPEI overlaid}
 
 \item{pressure_frames}{List. First item is a 3D array covering each timepoint
 of the measurement.}
-
-\item{foot_side}{String. "right" or "left". Required for automatic detection of
-points}
 }
 \value{
 Numeric. CPEI value

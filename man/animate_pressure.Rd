@@ -8,7 +8,8 @@ animate_pressure(
   pressure_data,
   plot_colors = "default",
   fps,
-  filename,
+  dpi = 96,
+  file_name,
   preview = FALSE
 )
 }
@@ -20,9 +21,11 @@ measurement. z dimension represents time}
 
 \item{fps}{Numeric. Number of frames per second in animation}
 
-\item{preview}{Logical. Whether to play the animation}
+\item{dpi}{Numeric. Resolution of gif}
 
-\item{file}{Name (inlcuding path) of export file}
+\item{file_name}{Name (inlcuding path) of export file}
+
+\item{preview}{Logical. Whether to play the animation}
 }
 \value{
 Animation in gif format
@@ -32,7 +35,7 @@ Produce animation (gif) of pressure distribution
 }
 \examples{
 pressure_data <- load_emed("inst/extdata/emed_test.lst")
-animate_pressure(pressure_data, fps = 10, filename = "testgif2.gif")
+animate_pressure(pressure_data, fps = 10, filename = "testgif3.gif")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -54,6 +54,9 @@ Produce plot of pressure data
 \examples{
 pressure_data <- load_emed("inst/extdata/emed_test.lst")
 plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
+plot_pressure(pressure_data, variable = "frame", frame = 2,
+              plot_colors = "custom", break_values = c(100, 200, 300, 750),
+              break_colors = c("blue", "green", "yellow", "red", "pink"))
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -7,7 +7,7 @@
 auto_detect_side(pressure_data)
 }
 \arguments{
-\item{pressure_data.}{List. First item should be a 3D array covering each
+\item{pressure_data}{List. First item should be a 3D array covering each
 timepoint of the measurement. z dimension represents time}
 }
 \value{

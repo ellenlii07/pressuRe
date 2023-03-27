@@ -15,6 +15,8 @@ select_steps(
 )
 }
 \arguments{
+\item{pressure_data}{List}
+
 \item{threshold_R}{Numeric. Threshold force to define start and end of step}
 
 \item{threshold_L}{Numeric. Threshold force to define start and end of step}
@@ -31,8 +33,6 @@ candidate steps}
 
 \item{skip}{Numeric. Usually the first few steps of a trial are accelerating
 and not representative of steady state walking so this removes them}
-
-\item{pressure_data.}{List}
 }
 \value{
 \itemize{

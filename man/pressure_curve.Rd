@@ -4,15 +4,15 @@
 \alias{pressure_curve}
 \title{Pressure curve}
 \usage{
-pressure_curve(pressure_frames, variable = "peak", plot = FALSE)
+pressure_curve(pressure_data, variable = "peak", plot = FALSE)
 }
 \arguments{
-\item{plot}{Logical. If TRUE also plots data as line curve}
-
-\item{pressure_data.}{List. First item should be a 3D array covering each
+\item{pressure_data}{List. First item should be a 3D array covering each
 timepoint of the measurement. z dimension represents time}
 
-\item{variable.}{String. Whether "peak", "mean", or "pti" should be used}
+\item{variable}{String. Whether "peak", "mean", or "pti" should be used}
+
+\item{plot}{Logical. If TRUE also plots data as line curve}
 }
 \value{
 Numeric vector containing force values

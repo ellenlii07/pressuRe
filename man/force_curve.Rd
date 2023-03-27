@@ -7,12 +7,12 @@
 force_curve(pressure_data, side, plot = FALSE)
 }
 \arguments{
+\item{pressure_data}{List. A 3D array covering each timepoint of the
+measurement. z dimension represents time}
+
 \item{side}{For insole data only}
 
 \item{plot}{Logical. If TRUE also plots data as line curve}
-
-\item{pressure_data.}{List. A 3D array covering each timepoint of the
-measurement. z dimension represents time}
 }
 \value{
 Numeric vector containing force values

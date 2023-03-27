@@ -15,6 +15,8 @@ mask_analysis(
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
 measurement. z dimension represents time}
 
+\item{masks}{List. Masks used to define the regions to be analysed}
+
 \item{partial_sensors}{Logical Defines how sensors that do not
 lie wholly within mask are dealt with. If FALSE, they will be excluded;
 if TRUE, for relevant variables their contribution will be weighted by the
@@ -24,8 +26,6 @@ proportion of the sensor that falls within the mask border}
 "peak_sensor_ts", "peak_mask", "peak_mask_ts", "mean_mask",
 "contact_area_peak", "contact_area_ts", "pti_1", "pti_2", force_peak",
 "force_ts"}
-
-\item{masks.}{List. Masks used to define the regions to be analysed}
 }
 \value{
 Data frame.
