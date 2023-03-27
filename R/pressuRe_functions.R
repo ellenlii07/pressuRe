@@ -972,14 +972,12 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   # if pedar
 
   # max size of df
-  fp <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
+  fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
                          output = "df")
-  x_lim <- max(fp$x)
-  y_lim <- max(fp$y)
+  x_lim <- max(fp_sens$x)
+  y_lim <- max(fp_sens$y)
 
-  if (variable != "max") {
-    fp <- footprint(pressure_data, variable = variable, frame)
-  }
+  fp <- footprint(pressure_data, variable = variable, frame)
 
   # get footprint vector
   fp <- as.vector(fp)
@@ -2347,7 +2345,7 @@ masks_2_df <- function(masks) {
 
 sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
   # pressure image
-  if (pressure_image == "all_active") {
+  if (pressure_image == "all_active" | pressure_image == "max") {
     sens <- footprint(pressure_data, variable = "max")
   }
   if (pressure_image == "all") {
@@ -2393,8 +2391,8 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
     sens_coords <- sensor_coords(pressure_data, pressure_image, frame)
 
     # sensor dimensions
-    width <- pressure_data[[3]][1]
-    height <- pressure_data[[3]][2]
+    width <- pressure_data[[3]][1] / 2
+    height <- pressure_data[[3]][2] / 2
 
     # get corner points and make into polygon
     for (sens in 1:nrow(sens_coords)) {
@@ -2436,7 +2434,6 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
     # make into identity df
     for (i in 1:length(sens_polygons)) {
       mat <- st_coordinates(sens_polygons[[i]])[, c(1, 2)]
-      #mat_df <- data.frame(mat[1:(nrow(mat) - 1), ])
       mat_df <- data.frame(mat)
       id <- rep(i, length.out = nrow(mat_df))
       mat_df <- cbind(mat_df, id)
