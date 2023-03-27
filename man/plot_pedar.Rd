@@ -6,6 +6,13 @@
 \usage{
 plot_pedar(pressure_data, pressure_image = "step_max", step_n)
 }
+\arguments{
+\item{pressure_data}{List.}
+
+\item{pressure_image}{String.}
+
+\item{step_n}{Numeric}
+}
 \description{
 plot pedar
 }

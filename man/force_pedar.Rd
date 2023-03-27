@@ -4,10 +4,12 @@
 \alias{force_pedar}
 \title{pedar force}
 \usage{
-force_pedar(pressure_data, side)
+force_pedar(pressure_data, foot_side)
 }
 \arguments{
 \item{pressure_data}{List.}
+
+\item{foot_side}{String}
 }
 \description{
 pedar force

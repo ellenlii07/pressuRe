@@ -35,7 +35,7 @@ Produce animation (gif) of pressure distribution
 }
 \examples{
 pressure_data <- load_emed("inst/extdata/emed_test.lst")
-animate_pressure(pressure_data, fps = 10, filename = "testgif3.gif")
+animate_pressure(pressure_data, fps = 10, file_name = "testgif3.gif")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
