@@ -52,7 +52,8 @@ ggplot plot object
 Produce plot of pressure data
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
 plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 plot_pressure(pressure_data, variable = "frame", frame = 2,
               plot_colors = "custom", break_values = c(100, 200, 300, 750),

@@ -19,7 +19,6 @@
 # global pressure_import function (leave for V2)
 # cop for pedar
 # add progress bar for animation
-# fix weird border effect on plots
 
 # data list:
 ## Array. pressure data
@@ -48,7 +47,8 @@
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' @importFrom stringr str_extract_all str_detect
 #' @importFrom utils read.fwf read.table
 #' @export
@@ -341,7 +341,8 @@ load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' pressure_data <- pressure_interp(pressure_data, interp_to = 101)
 #' @export
 
@@ -417,6 +418,9 @@ pressure_interp <- function(pressure_data, interp_to) {
 select_steps <- function (pressure_data, threshold_R = 20,
                           threshold_L = 20, min_frames = 10,
                           steps_Rn = 5, steps_Ln = 5, skip = 2) {
+  # set up global variables
+  frame <- NULL
+
   # check session is interactive
   if (interactive() == FALSE)
     stop("user needs to select suitable steps")
@@ -566,9 +570,12 @@ select_steps <- function (pressure_data, threshold_R = 20,
 #' timepoint of the measurement. z dimension represents time
 #' @return String. "LEFT" or "RIGHT"
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' auto_detect_side(pressure_data)
-#' @importFrom sf st_polygon st_as_sf st_convex_hull st_combine st_intersection st_area
+#' @importFrom sf st_polygon st_as_sf st_convex_hull st_combine
+#' st_intersection st_area
+#' @importFrom stats dist
 #' @export
 
 auto_detect_side <- function(pressure_data) {
@@ -649,12 +656,16 @@ auto_detect_side <- function(pressure_data) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' force_curve(pressure_data, side = "left", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
 force_curve <- function(pressure_data, side, plot = FALSE) {
+  # set global variables
+  time <- NULL
+
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -708,13 +719,17 @@ force_curve <- function(pressure_data, side, plot = FALSE) {
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
 pressure_curve <- function(pressure_data, variable = "peak",
                            plot = FALSE) {
+  # set global variables
+  time <- NULL
+
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
@@ -770,7 +785,8 @@ pressure_curve <- function(pressure_data, variable = "peak",
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' area_curve(pressure_data, plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
@@ -792,7 +808,7 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
   area <- rep(NA, times = dim(pressure_array)[3])
 
   # sensor size
-  sen_size <- pressure_data[[2]][1] * pressure_data[[2]][2]
+  sen_size <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
   # find active area for each frame and store in vector
   for (i in 1:dim(pressure_array)[3]) {
@@ -828,7 +844,8 @@ area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
 #' of the measurement. z dimension represents time
 #' @return Data frame with x and y coordinates of COP throughout trial
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' cop(pressure_data)
 #' @export
 
@@ -896,7 +913,8 @@ cop <- function(pressure_data) {
 #' @param plot Logical. Display pressure image
 #' @return Matrix. Maximum or mean values for all sensors
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' footprint(pressure_data, plot = TRUE)
 #' @export
 
@@ -955,7 +973,8 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @return ggplot plot object
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
 #' plot_pressure(pressure_data, variable = "frame", frame = 2,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
@@ -968,38 +987,45 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                           plot_COP = FALSE, plot_outline = FALSE,
                           plot_colors = "default", break_values, break_colors,
                           plot = TRUE) {
+  # set global variables
+  x <- y <- id <- cols <- x_coord <- y_coord <- NULL
+
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure data must contain array")
 
   # if pedar
+  if (pressure_data[[2]] == "pedar") {
+    cor <- plot_pedar(pressure_data, variable, step_n)
+  } else {
+    # max size of df
+    fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
+                                output = "df")
+    x_lim <- max(fp_sens$x)
+    y_lim <- max(fp_sens$y)
 
-  # max size of df
-  fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
-                         output = "df")
-  x_lim <- max(fp_sens$x)
-  y_lim <- max(fp_sens$y)
+    fp <- footprint(pressure_data, variable = variable, frame)
 
-  fp <- footprint(pressure_data, variable = variable, frame)
+    # get footprint vector
+    fp <- as.vector(fp)
+    fp <- fp[fp > 0]
 
-  # get footprint vector
-  fp <- as.vector(fp)
-  fp <- fp[fp > 0]
+    # generate coordinates for each sensor
+    sens_poly <- sensor_2_polygon(pressure_data, pressure_image = variable,
+                                  frame, output = "df")
 
-  # generate coordinates for each sensor
-  sens_poly <- sensor_2_polygon(pressure_data, pressure_image = variable,
-                                frame, output = "df")
+    # combine with pressure values
+    ids <- c(1:length(as.vector(fp)))
+    vals <- data.frame(id = ids, value = as.vector(fp))
 
-  # combine with pressure values
-  ids <- c(1:length(as.vector(fp)))
-  vals <- data.frame(id = ids, value = as.vector(fp))
+    # merge value and coordinate frames
+    cor <- merge(sens_poly, vals, by = c("id"))
 
-  # merge value and coordinate frames
-  cor <- merge(sens_poly, vals, by = c("id"))
+    # add colors
+    cor <- generate_colors(cor, col_type = plot_colors, break_values,
+                           break_colors)
+  }
 
-  # add colors
-  cor <- generate_colors(cor, col_type = plot_colors, break_values,
-                         break_colors)
   if (plot_colors == "default") {
     break_colors <- c("grey","lightblue", "darkblue","green","yellow",
                       "red", "pink")
@@ -1008,7 +1034,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   ## plot
   g <- ggplot()
   g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols),
-                        color = "black", lwd = 0)
+                        color = NA, lwd = 0)
   g <- g + scale_fill_manual(values = break_colors)
   g <- g + scale_x_continuous(expand = c(0, 0), limits = c(0, x_lim))
   g <- g + scale_y_continuous(expand = c(0, 0), limits = c(0, y_lim))
@@ -1050,17 +1076,20 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
+#' @param pressure_image String. "max" = footprint of maximum sensors. "frame"
+#' = an individual frame
 #' @param frame Integer. Frame number to use
 #' @return Polygon. sfg object representing convex hull outline
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' pressure_outline(pressure_data)
 #' pressure_outline(pressure_data, frame = 50)
 #' @importFrom magrittr "%>%"
 #' @importFrom sf st_as_sf st_convex_hull st_combine st_buffer
 #' @export
 
-pressure_outline <- function(pressure_data, frame) {
+pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure data must contain array")
@@ -1070,8 +1099,8 @@ pressure_outline <- function(pressure_data, frame) {
     stop("data cannot be from pedar")
 
   # determine active sensor coordinates
-  if (missing(frame) == TRUE) {
-    coords <- sensor_coords(pressure_data)
+  if (pressure_image == "max") {
+    coords <- sensor_coords(pressure_data, pressure_image = "max")
   } else {
     coords <- sensor_coords(pressure_data, "frame", frame)
   }
@@ -1104,8 +1133,11 @@ pressure_outline <- function(pressure_data, frame) {
 #' @param preview Logical. Whether to play the animation
 #' @return Animation in gif format
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
-#' animate_pressure(pressure_data, fps = 10, file_name = "testgif3.gif")
+#' /dontrun {
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' animate_pressure(pressure_data, fps = 10, file_name = "testgif.gif")
+#' }
 #' @importFrom stringr str_ends str_pad
 #' @importFrom magick image_graph image_animate image_write image_info
 #' image_read
@@ -1171,7 +1203,8 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' @param plot Logical. Whether to play the animation
 #' @return List. Contains polygon with each mask
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
 #' @importFrom zoo rollapply
 #' @importFrom rgeos gBuffer
@@ -1815,7 +1848,8 @@ automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
 #' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
 #' @examples
-#' pressure_data <- load_emed("inst/extdata/emed_test.lst")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' pressure_data <- create_mask(pressure_data, 4)
 #' @importFrom grDevices x11
 #' @importFrom ggmap gglocator
@@ -1825,6 +1859,9 @@ automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
 
 create_mask <- function(pressure_data, n_verts = 4, image = "max",
                         preview = TRUE) {
+  # global variables
+  x <- y <- NULL
+
   # check session is interactive
   if (interactive == FALSE)
     stop("user needs to select mask vertices")
@@ -1899,9 +1936,39 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   if (interactive == FALSE)
     stop("we recommend user reviews each measurement")
 
-  #ff_width_line
-  #cop_line
-  #cop_straight
+  # bounding box
+  # Find footprint (max)
+  max_df <- footprint(pressure_data)
+
+  # coordinates
+  sens_coords <- sensor_coords(pressure_data, "all")
+
+  # make data frame
+  P <- c(max_df)
+  em_act_df <- data.frame(x = sens_coords$x_coord, y = sens_coords$y_coord,
+                          P = P)
+  em_act_df <- em_act_df[which(P >= 5), ]
+  em_act_df$P <- NULL
+
+  # side
+  if (foot_side == "auto") {
+    side <- auto_detect_side(pressure_data)
+  } else {
+    side <- foot_side
+  }
+
+  # Define minimum bounding box
+  em_act_m <- as.matrix(em_act_df)
+  mbb <- getMinBBox(em_act_m)
+  mbb_df <- data.frame(x = mbb$pts[, 1], y = mbb$pts[, 2])
+
+  # outline
+  press_outline <- pressure_outline(pressure_data, pressure_image = "max")
+
+  # ff_width_line
+  # cop_line
+  # cop_straight
+  ## adjust to fit
 
   # geometry helper functions
   # Finds the intersection point of a line from a point perpendicular to
@@ -2116,10 +2183,16 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
 #'  "force_ts"
 #' @return Data frame.
 #' @examples
-#'  mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
+#' @importFrom sf st_intersects
+#' @export
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
+  # set global variables
+  act_sens_poly <- act_sens
   # sensor area
   sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
@@ -2252,10 +2325,13 @@ approxP <- function(x, interp_to) {
 }
 
 
-#' Get minimum bounding box (angle)
-#' @param xy Matrix. n row by 2 column with x-y coords of points to be bounded
+#' @title Get minimum bounding box (angle)
+#' @description Create a bounding box around sensor coordinate array
+#' @param xy Matrix. n row by 2 column with x-y coords of points to be
+#' bounded
+#' @return List
+#' @importFrom grDevices chull
 #' @noRd
-
 getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
 
@@ -2309,7 +2385,11 @@ getMinBBox <- function(xy) {
 }
 
 
-#' sf masks to dataframe
+#' @title masks (sf format) to dataframe
+#' @description converts mask coordinates into a data frame
+#' @param masks List
+#' @returns Data frame
+#' @importFrom dplyr bind_rows
 #' @noRd
 masks_2_df <- function(masks) {
   # no. of masks
@@ -2382,12 +2462,19 @@ sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
 
 
 
-#" rectilinear sensor array to polygon
+#' @title sensor array to polygon
+#' @description converts sensor positions (coordinates) to polygons
+#' @param pressure_data List
+#' @param pressure_image String
+#' @param frame Numeric
 #' @param output String. "df" dataframe for plotting or "sf" shape poly for analysis
 #' @importFrom sf st_polygon st_coordinates
 #' @noRd
 sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
                              frame = NA, output = "sf") {
+  # set global variables
+  pedar_insole_grid <- NULL
+
   # sensor coordinates
   sens_polygons <- list()
   if (pressure_data[[2]] != "pedar") {
@@ -2450,10 +2537,16 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
   if (output == "df") {return(id_df)}
 }
 
-#' pedar force
+#' @title pedar force
+#' @description generates force curve from pedar data
 #' @param pressure_data List.
 #' @param foot_side String
+#' @return Vector
+#' @noRd
 force_pedar <- function(pressure_data, foot_side) {
+  # set global variables
+  pedar_insole_areas <- NULL
+
   # check this is pedar data
   if (pressure_data[[2]] != "pedar")
     stop("must be pedar data")
@@ -2469,16 +2562,28 @@ force_pedar <- function(pressure_data, foot_side) {
   force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
 
   # calculate force
-  if (side == "right") {force_array <- force_array[, , 1] * pedarSensorAreas}
-  if (side == "left") {force_array <- force_array[, , 2] * pedarSensorAreas}
+  if (foot_side == "right") {
+    force_array <- force_array[, , 1] * pedarSensorAreas}
+  if (foot_side == "left") {
+    force_array <- force_array[, , 2] * pedarSensorAreas}
   force <- rowSums(force_array)
 }
 
-#' plot pedar
+#' @title plot pedar
+#' @description produces dataframe that plot_pressure uses to plot pedar data
 #' @param pressure_data List.
-#' @param pressure_image String.
-#' @param step_n Numeric
-plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
+#' @param pressure_image String. "max" = maximum values for full trial;
+#' "mean" = mean value across trial; "step_max"
+#' @param foot_side String. "both", "left", or "right"
+#' @param step_n Numeric. If pressure_image is "step_max", the step number to
+#' analyze
+#' @return ggplot object
+#' @noRd
+plot_pedar <- function(pressure_data, pressure_image = "max",
+                       foot_side = "left", step_n) {
+  # set global variables
+  pedar_insole_grid <- x <- y <- id <- NULL
+
   # check this is pedar (or other suitable) data
   if (!(pressure_data[[2]] == "pedar"))
     stop("data should be from pedar")
@@ -2493,15 +2598,21 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   pressure_L_mat <- matrix(as.vector(pressure_data[[1]][2, , ]),
                            dims[2], dims[3])
 
-  # separate into steps
-  start_end_R <- pressure_data[[6]]
-  start_end_L <- pressure_data[[6]]
-  #pressure_R_mat <- pressure_R_mat[start_end_R[],]
+  # pressure image
+  if (pressure_image == "max") {
+    R_data <- apply(pressure_R_mat, 1, max)
+    L_data <- apply(pressure_L_mat, 1, max)
+  }
 
-  # get max values from each sensor
-  R_Mean_max <- apply(pressure_R_mat, 1, max)
-  L_Mean_max <- apply(pressure_L_mat, 1, max)
-  Mean_max <- c(L_Mean_max, R_Mean_max)
+  # separate into steps
+  if (pressure_image == "step_max") {
+    start_end_R <- pressure_data[[6]]
+    start_end_L <- pressure_data[[6]]
+    #pressure_R_mat <- pressure_R_mat[start_end_R[],]
+  }
+
+  # combine data
+  comb_data <- c(L_data, R_data)
 
   # make ids
   ids <- c()
@@ -2509,7 +2620,7 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   for (i in 1:99) {ids = append(ids, paste0("R", i))}
 
   # make df
-  df <- data.frame(id = ids, value = Mean_max)
+  df <- data.frame(id = ids, value = comb_data)
 
   # add coordinates to df
   xs <- c()
@@ -2526,12 +2637,16 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
   # add color
   df <- generate_colors(df)
 
-  # plot
-  g <- ggplot(df, aes(x = x, y = y, group = id))
-  g <- g + geom_polygon(fill = df$col, color = "black")
-  g <- g + coord_fixed()
-  g <- g + theme_void()
-  print(g)
+  # side
+  if (foot_side == "left") {
+    df <- df[397:792]
+  }
+  if (foot_side == "right") {
+    df <- df[1:396]
+  }
+
+  # return
+  return(df)
 }
 
 
@@ -2548,7 +2663,7 @@ plot_pedar <- function(pressure_data, pressure_image = "step_max", step_n) {
 generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
   if (col_type == "default") {
-    break_values <- c(0, 40, 60, 100, 150, 220, 450, 1000000)
+    break_values <- c(0, 40, 60, 100, 150, 220, 300, 1000000)
     break_colors <- c("grey","lightblue", "darkblue","green","yellow",
                       "red","pink")
   } else {

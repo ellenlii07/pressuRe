@@ -34,8 +34,11 @@ Animation in gif format
 Produce animation (gif) of pressure distribution
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
-animate_pressure(pressure_data, fps = 10, file_name = "testgif3.gif")
+/dontrun {
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
+animate_pressure(pressure_data, fps = 10, file_name = "testgif.gif")
+}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -17,7 +17,8 @@ Data frame with x and y coordinates of COP throughout trial
 Generates center of pressure coordinates
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
 cop(pressure_data)
 }
 \author{

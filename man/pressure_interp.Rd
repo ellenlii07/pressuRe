@@ -28,7 +28,8 @@ Interpolates data over time. Useful for normalizing to stance
 phase, for example
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
 pressure_data <- pressure_interp(pressure_data, interp_to = 101)
 }
 \author{

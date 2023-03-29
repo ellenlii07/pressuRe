@@ -21,7 +21,8 @@ Numeric vector containing force values
 Generates force vector with option to plot
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
 force_curve(pressure_data, side = "left", plot = TRUE)
 }
 \author{

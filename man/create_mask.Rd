@@ -25,7 +25,8 @@ List New mask is added to the relevant A 3D array covering each timepoint of the
 Manually create mask region
 }
 \examples{
-pressure_data <- load_emed("inst/extdata/emed_test.lst")
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
 pressure_data <- create_mask(pressure_data, 4)
 }
 \author{
