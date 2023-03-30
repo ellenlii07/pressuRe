@@ -1,5 +1,5 @@
 # to do
-# pti to pressure curve function
+# pti and others to be added to pressure curve function
 # plotting examples with different colors
 # fscan import function
 # rewrite CPEI
@@ -19,6 +19,7 @@
 # global pressure_import function (leave for V2)
 # cop for pedar
 # add progress bar for animation
+# helper function for ordering bounding box...or roll into get minBBox?
 
 # data list:
 ## Array. pressure data
@@ -580,16 +581,11 @@ select_steps <- function (pressure_data, threshold_R = 20,
 
 auto_detect_side <- function(pressure_data) {
   # max pressure footprint
-  fp <- footprint(pressure_data)
-  fp_coords <- sensor_coords(pressure_data, "all")
-  P <- c(fp)
-  sc_df <- data.frame(x = fp_coords$x_coord, y = fp_coords$y_coord, P = P)
-  sc_df <- sc_df[which(P >= 5), ]
-  sc_df$P <- NULL
-  sc_mat <- as.matrix(sc_df)
+  sc_df <- sensor_2_polygon(pressure_data, output = "df")[, c(1, 2)]
+  sc_df <- sc_df[!duplicated(sc_df), ]
 
   # Bounding box
-  mbb <- getMinBBox(sc_mat)
+  mbb <- getMinBBox(as.matrix(sc_df))
   mbb_coords <- mbb$pts
 
   # Which sides of BBox are longest?
@@ -715,7 +711,10 @@ force_curve <- function(pressure_data, side, plot = FALSE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
-#' @param variable String. Whether "peak", "mean", or "pti" should be used
+#' @param variable String. "peak" = peak sensor in each time point,
+#' "mean" = average of all active sensors for each time point, "pti" =
+#' pressure time integral for each time point; "pti_melai" pressure time
+#' integral as defined by Melai for each time point
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing force values
 #' @examples
@@ -1930,25 +1929,13 @@ edit_mask <- function(pressure_data) {
 #' @return Numeric. CPEI value
 #' @examples
 #' cpei(pressure_data, foot_side = "auto", plot = TRUE)
+#' @importFrom sf
+#' @export
 
 cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   # check set up
   if (interactive == FALSE)
     stop("we recommend user reviews each measurement")
-
-  # bounding box
-  # Find footprint (max)
-  max_df <- footprint(pressure_data)
-
-  # coordinates
-  sens_coords <- sensor_coords(pressure_data, "all")
-
-  # make data frame
-  P <- c(max_df)
-  em_act_df <- data.frame(x = sens_coords$x_coord, y = sens_coords$y_coord,
-                          P = P)
-  em_act_df <- em_act_df[which(P >= 5), ]
-  em_act_df$P <- NULL
 
   # side
   if (foot_side == "auto") {
@@ -1957,17 +1944,86 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
     side <- foot_side
   }
 
-  # Define minimum bounding box
-  em_act_m <- as.matrix(em_act_df)
-  mbb <- getMinBBox(em_act_m)
-  mbb_df <- data.frame(x = mbb$pts[, 1], y = mbb$pts[, 2])
+  # max pressure footprint
+  sc_df <- sensor_2_polygon(pressure_data, output = "df")[, c(1, 2)]
+  sc_df <- sc_df[!duplicated(sc_df), ]
 
-  # outline
-  press_outline <- pressure_outline(pressure_data, pressure_image = "max")
+  # convex hull
+  df.sf <- sc_df %>%
+    st_as_sf(coords = c( "x", "y" ))
+  fp_chull <- sf::st_concave_hull(st_combine(df.sf))
 
-  # ff_width_line
+  # Bounding box
+  mbb <- getMinBBox(as.matrix(sc_df))
+  mbb_coords <- mbb$pts
+
+  # Which sides of BBox are longest?
+  if (dist(mbb_coords[c(1, 2), ]) > dist(mbb_coords[c(2, 3), ])) {
+    side1 <- mbb_coords[c(1, 2), ]
+    side2 <- mbb_coords[c(3, 4), ]
+  } else {
+    side1 <- mbb_coords[c(2, 3), ]
+    side2 <- mbb_coords[c(4, 1), ]
+  }
+
+  # order so lowest first
+  side1 <- side1[order(side1[, 2]), ]
+  side2 <- side2[order(side2[, 2]), ]
+
+  # which side is L/R
+  if (side1[1, 1] > side2[1, 1]) {
+    side1_ <- side1 # side1_ is right
+    side2_ <- side2
+  } else {
+    side1_ <- side2
+    side2_ <- side1
+  }
+
+  # Get distal trisection points and make line
+  trisection_left <- side2[1, ] + ((side2[2, ] - side2[1, ]) * 0.67)
+  trisection_right <- side1[1, ] + ((side1[2, ] - side1[1, ]) * 0.67)
+  trisection_df <- data.frame(x = c(trisection_left[1], trisection_right[1]),
+                              y = c(trisection_left[2], trisection_right[2]))
+  tri_line <- st_linestring(as.matrix(trisection_df))
+  tri_line <- st_extend_line(tri_line, 1)
+  tri_int <- st_intersection(st_cast(fp_chull, "MULTILINESTRING"), tri_line)
+
+  # ff width
+  ff_width <- unname(dist(st_coordinates(tri_int)))
+
+  # heel point
+  heel_left <- side2[1, ] + ((side2[2, ] - side2[1, ]) * 0.15)
+  heel_right <- side1[1, ] + ((side1[2, ] - side1[1, ]) * 0.15)
+
+
+  # bounding box
+
+  # convex hull
+
+  # trisection
+
+  # ff width
+
+  # heel_point
+
+  # cop
+
   # cop_line
+
+
+
+
+  # cop_line
+  cop_df <- cop(pressure_data)
+  cop_sf <- cop_df %>%
+    st_as_sf(coords = c("x_coord", "y_coord"))
+  fp_chull <- st_convex_hull(st_combine(cop_sf))
+
   # cop_straight
+  df <- st_coordinates(fp_chull)[, c(1, 2)]
+  mat <- as.matrix(dist(df))
+  mat[row(mat) == col(mat) + 1]
+
   ## adjust to fit
 
   # geometry helper functions
@@ -2686,4 +2742,41 @@ generate_colors <- function(df, col_type = "default", break_values,
 
   #return
   return (df)
+}
+
+st_ends_heading <- function(line)
+{
+  M <- sf::st_coordinates(line)
+  i <- c(2, nrow(M) - 1)
+  j <- c(1, -1)
+
+  headings <- mapply(i, j, FUN = function(i, j) {
+    Ax <- M[i-j,1]
+    Ay <- M[i-j,2]
+    Bx <- M[i,1]
+    By <- M[i,2]
+    unname(atan2(Ay-By, Ax-Bx))
+  })
+
+  return(headings)
+}
+
+st_extend_line <- function(line, distance, end = "BOTH")
+{
+  if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1) stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
+
+  M <- sf::st_coordinates(line)[,1:2]
+  keep <- !(end == c("TAIL", "HEAD"))
+
+  ends <- c(1, nrow(M))[keep]
+  headings <- st_ends_heading(line)[keep]
+  distances <- if (length(distance) == 1) rep(distance, 2) else rev(distance[1:2])
+
+  M[ends,] <- M[ends,] + distances[keep] * c(cos(headings), sin(headings))
+  newline <- sf::st_linestring(M)
+
+  # If input is sfc_LINESTRING and not sfg_LINESTRING
+  if (is.list(line)) newline <- sf::st_sfc(newline, crs = sf::st_crs(line))
+
+  return(newline)
 }
