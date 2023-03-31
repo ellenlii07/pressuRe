@@ -5,11 +5,14 @@
 \title{Get outline of pressure region
 Determine outline (convex hull) of pressure measurement}
 \usage{
-pressure_outline(pressure_data, frame)
+pressure_outline(pressure_data, pressure_image = "max", frame)
 }
 \arguments{
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
 measurement. z dimension represents time}
+
+\item{pressure_image}{String. "max" = footprint of maximum sensors. "frame"
+= an individual frame}
 
 \item{frame}{Integer. Frame number to use}
 }

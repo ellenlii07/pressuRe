@@ -643,24 +643,25 @@ auto_detect_side <- function(pressure_data) {
 
 # =============================================================================
 
-#' @title Force curve
-#' @description Generates force vector with option to plot
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @title Whole pressure curve
+#' @description Generates vectors with option to plot for force, peak/mean
+#' pressure and area for complete measurement. Useful for checking data
 #' @param pressure_data List. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
+#' @param variable String. "peak_pressure", "mean_pressure", "force", or "area"
 #' @param side For insole data only
 #' @param plot Logical. If TRUE also plots data as line curve
-#' @return Numeric vector containing force values
+#' @return Numeric vector containing variable values
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' force_curve(pressure_data, side = "left", plot = TRUE)
+#' whole_pressure_curve(pressure_data, variable = "peak_pressure", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
-force_curve <- function(pressure_data, side, plot = FALSE) {
+whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
   # set global variables
-  time <- NULL
+  time <- NULL <- value
 
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
@@ -668,170 +669,68 @@ force_curve <- function(pressure_data, side, plot = FALSE) {
   if(pressure_data[[2]] == "pedar" & missing(side) == TRUE)
     stop("insole data needs to have side")
 
-  # convert to force
-  if (pressure_data[[2]] == "pedar") {
-    force <- force_pedar(pressure_data, side)
-  } else {
-    sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
-    force_array <- pressure_data[[1]] * sens_area * 1000
+  # create empty vector to store variable
+  values <- rep(NA, times = dim(pressure_data[[1]])[3])
 
-    # create empty vector
-    force <- rep(NA, times = dim(force_array)[3])
+  # force
+  if (variable == "force") {
+    if (pressure_data[[2]] == "pedar") {
+      force <- force_pedar(pressure_data, side)
+    } else {
+      sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+      force_array <- pressure_data[[1]] * sens_area * 1000
 
-    # find total force for each frame and store in vector
-    for (i in 1:dim(force_array)[3]) {
-      force[i] <- sum(force_array[, , i])
+      # find total force for each frame and store in vector
+      for (i in 1:dim(force_array)[3]) {
+        values[i] <- sum(force_array[, , i])
+      }
+    }
+  }
+
+  # peak or mean pressure
+  if (variable == "peak_pressure" | variable == "mean_pressure") {
+    for (i in 1:dim(pressure_data[[1]])[3]) {
+      if (variable == "peak_pressure") {
+        values[i] <- max(pressure_data[[1]][, , i])
+      }
+      if (variable == "mean_pressure") {
+        active_sens <- which(pressure_data[[1]][, , i] > 0, arr.ind = TRUE)
+        values[i] <- mean(pressure_data[[1]][active_sens[, 1],
+                                             active_sens[, 2], i])
+      }
+    }
+  }
+
+  # area
+  if (variable == "area") {
+    # sensor size
+    sen_size <- pressure_data[[3]][1] * pressure_data[[3]][2]
+
+    # find active area for each frame and store in vector
+    for (i in 1:dim(pressure_data[[1]])[3]) {
+      values[i] <- (sum(pressure_data[[1]][, , i] > 0)) * sen_size
     }
   }
 
   # plot, if required
   if (plot == TRUE) {
     # make df
-    force_df <- data.frame(force = force,
-                           time = seq(0, by = pressure_data[[4]],
-                                      length.out = length(force)))
+    variable_df <- data.frame(value = values,
+                              time = seq(0, by = pressure_data[[4]],
+                                         length.out = length(values)))
 
     # plot
-    g <- ggplot(force_df, aes(x = time, y = force))
+    g <- ggplot(variable_df, aes(x = time, y = value))
     g <- g + geom_line()
     g <- g + theme_bw()
-    g <- g + xlab("time (s)") + ylab("Force (N)")
+    g <- g + xlab("time (s)") + ylab(variable)
     print(g)
   }
 
   # return
-  return(force)
+  return(values)
 }
 
-
-# =============================================================================
-
-#' @title Pressure curve
-#' @description Generate pressure curve with option to plot
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. First item should be a 3D array covering each
-#' timepoint of the measurement. z dimension represents time
-#' @param variable String. "peak" = peak sensor in each time point,
-#' "mean" = average of all active sensors for each time point, "pti" =
-#' pressure time integral for each time point; "pti_melai" pressure time
-#' integral as defined by Melai for each time point
-#' @param plot Logical. If TRUE also plots data as line curve
-#' @return Numeric vector containing force values
-#' @examples
-#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-#' pressure_data <- load_emed(emed_data)
-#' pressure_curve(pressure_data, variable = "peak", plot = TRUE)
-#' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
-#' @export
-
-pressure_curve <- function(pressure_data, variable = "peak",
-                           plot = FALSE) {
-  # set global variables
-  time <- NULL
-
-  # check input
-  if (is.array(pressure_data[[1]]) == FALSE)
-    stop("pressure_frames input must contain an array")
-  if (is.character(variable) == FALSE)
-    stop("variable parameter must be a string")
-
-  # pressure array
-  pressure_array <- pressure_data[[1]]
-
-  # create empty vector
-  pressure <- rep(NA, times = dim(pressure_array)[3])
-
-  # find pressure for each frame and store in vector
-  for (i in 1:dim(pressure_array)[3]) {
-    if (variable == "peak") {
-      pressure[i] <- max(pressure_array[, , i])
-    }
-    if (variable == "mean") {
-      active_sens <- which(pressure_array[, , i] > 0, arr.ind = TRUE)
-      pressure[i] <- mean(pressure_array[active_sens[, 1], active_sens[, 2], i])
-    }
-  }
-
-  # plot, if required
-  if (plot == TRUE) {
-    # make df
-    pressure_df <- data.frame(pressure = pressure,
-                              time = seq(0, by = pressure_data[[3]],
-                                         length.out = length(pressure)))
-
-    # plot
-    g <- ggplot(pressure_df, aes(x = time, y = pressure))
-    g <- g + geom_line()
-    g <- g + theme_bw()
-    g <- g + xlab("time (s)") + ylab("Pressure (kPa)")
-    print(g)
-  }
-
-  # return
-  return(pressure)
-}
-
-
-# =============================================================================
-
-#' @title Contact area curve
-#' @description Generate contact area curve with option to plot
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. First item should be a 3D array covering each
-#' timepoint of the measurement. z dimension represents time
-#' @param threshold Numeric. The minimum pressure required for a sensor to be
-#' considered active
-#' @param plot Logical. If TRUE also plots data as line curve
-#' @return Numeric vector containing force values
-#' @examples
-#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-#' pressure_data <- load_emed(emed_data)
-#' area_curve(pressure_data, plot = TRUE)
-#' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
-#' @export
-
-area_curve <- function(pressure_data, threshold = 0, plot = FALSE) {
-  # binding variables
-  time_ <- NULL
-
-  # check input
-  if (is.array(pressure_data[[1]]) == FALSE)
-    stop("pressure_frames input must contain an array")
-  if (is.numeric(threshold) == FALSE)
-    stop("threshold must be a numeric value")
-
-  # pressure array
-  pressure_array <- pressure_data[[1]]
-
-  # create empty vector
-  area <- rep(NA, times = dim(pressure_array)[3])
-
-  # sensor size
-  sen_size <- pressure_data[[3]][1] * pressure_data[[3]][2]
-
-  # find active area for each frame and store in vector
-  for (i in 1:dim(pressure_array)[3]) {
-    area[i] <- (sum(pressure_array[, , i] > threshold)) * sen_size
-  }
-
-  # plot if requested
-  if (plot == TRUE) {
-    # make df
-    area_df <- data.frame(area = area,
-                          time_ = seq(0, by = pressure_data[[3]],
-                                     length.out = length(area)))
-
-    # plot
-    g <- ggplot(area_df, aes(x = time_, y = area))
-    g <- g + geom_line()
-    g <- g + theme_bw()
-    g <- g + xlab("time (s)") + ylab("Area (m^2)")
-    print(g)
-  }
-
-  # return
-  return(area)
-}
 
 
 # =============================================================================
@@ -1928,8 +1827,10 @@ edit_mask <- function(pressure_data) {
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
 #' @return Numeric. CPEI value
 #' @examples
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
 #' cpei(pressure_data, foot_side = "auto", plot = TRUE)
-#' @importFrom sf
+#' @importFrom sf st_convex_hull st_linestring
 #' @export
 
 cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
@@ -1951,7 +1852,7 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   # convex hull
   df.sf <- sc_df %>%
     st_as_sf(coords = c( "x", "y" ))
-  fp_chull <- sf::st_concave_hull(st_combine(df.sf))
+  fp_chull <- sf::st_convex_hull(st_combine(df.sf))
 
   # Bounding box
   mbb <- getMinBBox(as.matrix(sc_df))
@@ -2078,10 +1979,10 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
 
   ## Automatically identify all required points
   # outline of main part of foot
-  toe_cut <- ceiling(nrow(pressure_frames) / 5)
-  pressure_frames_trimmed <- pressure_frames[toe_cut:nrow(pressure_frames),
-                                             , ]
-  fp_out <- footprint_outline(pressure_frames_trimmed)
+  pressure_frame <- pressure_data[[1]]
+  toe_cut <- ceiling(nrow(pressure_frame) / 5)
+  pressure_data_trimmed <- pressure_frame[toe_cut:nrow(pressure_frames),,]
+  fp_out <- pressure_outline(pressure_frames_trimmed)
 
   # find the 2 sets of points with the largest distance between them
   dis <- as.matrix(dist(fp_out))
@@ -2122,7 +2023,7 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   toe_coord <- sc[sc_min[sc_dist], 2:3]
 
   # Find medial start and end points of COP
-  cop <- gen_cop(pressure_frames)
+  cop <- gen_cop(pressure_data)
   cop_start <- cop[1:15, ]
   start_point_n <- closest_point(cop_start, m_bor)
   start_point <- cop_start[start_point_n, ]
@@ -2744,23 +2645,6 @@ generate_colors <- function(df, col_type = "default", break_values,
   return (df)
 }
 
-st_ends_heading <- function(line)
-{
-  M <- sf::st_coordinates(line)
-  i <- c(2, nrow(M) - 1)
-  j <- c(1, -1)
-
-  headings <- mapply(i, j, FUN = function(i, j) {
-    Ax <- M[i-j,1]
-    Ay <- M[i-j,2]
-    Bx <- M[i,1]
-    By <- M[i,2]
-    unname(atan2(Ay-By, Ax-Bx))
-  })
-
-  return(headings)
-}
-
 st_extend_line <- function(line, distance, end = "BOTH")
 {
   if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1) stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
@@ -2769,7 +2653,16 @@ st_extend_line <- function(line, distance, end = "BOTH")
   keep <- !(end == c("TAIL", "HEAD"))
 
   ends <- c(1, nrow(M))[keep]
-  headings <- st_ends_heading(line)[keep]
+  i <- c(2, nrow(M) - 1)
+  j <- c(1, -1)
+  headings <- mapply(i, j, FUN = function(i, j) {
+    Ax <- M[i-j,1]
+    Ay <- M[i-j,2]
+    Bx <- M[i,1]
+    By <- M[i,2]
+    unname(atan2(Ay-By, Ax-Bx))
+  })
+  #headings <- st_ends_heading(line)[keep]
   distances <- if (length(distance) == 1) rep(distance, 2) else rev(distance[1:2])
 
   M[ends,] <- M[ends,] + distances[keep] * c(cos(headings), sin(headings))
