@@ -9,6 +9,7 @@ plot_pressure(
   variable = "max",
   smooth = FALSE,
   frame,
+  step_n,
   plot_COP = FALSE,
   plot_outline = FALSE,
   plot_colors = "default",
@@ -29,6 +30,8 @@ individual frame}
 increase data density}
 
 \item{frame}{Integer.}
+
+\item{step_n}{Integer. Step number to plot (only for insole data)}
 
 \item{plot_COP}{Logical. If TRUE, overlay COP data on plot. Default = FALSE}
 
