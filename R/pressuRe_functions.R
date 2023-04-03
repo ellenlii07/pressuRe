@@ -1,21 +1,18 @@
 # to do
-# pti and others to be added to pressure curve function
 # plotting examples with different colors
-# fscan import function
+# fscan import function filepath to fscan example
+# load_footscan function
 # rewrite CPEI
 # more output variables need to be added to  mask analysis
 # automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # more automasking schemes (pedar especially)
-# change footprint function name to more generic name?
 # Do we have all pedar insoles? Double check areas
 # area curve (and others) to work with insole data
-# filepath to fscan example
 # can load-iscan be made more generic?
 # add support for pliance
 # edit mask needs to be written
 # add more input tests to throw errors
 # legend for plots
-# load_footscan function
 # global pressure_import function (leave for V2)
 # cop for pedar
 # add progress bar for animation
@@ -586,37 +583,16 @@ auto_detect_side <- function(pressure_data) {
 
   # Bounding box
   mbb <- getMinBBox(as.matrix(sc_df))
-  mbb_coords <- mbb$pts
-
-  # Which sides of BBox are longest?
-  if (dist(mbb_coords[c(1, 2), ]) > dist(mbb_coords[c(2, 3), ])) {
-    side1 <- mbb_coords[c(1, 2), ]
-    side2 <- mbb_coords[c(3, 4), ]
-  } else {
-    side1 <- mbb_coords[c(2, 3), ]
-    side2 <- mbb_coords[c(4, 1), ]
-  }
-
-  # order so lowest first
-  side1 <- side1[order(side1[, 2]), ]
-  side2 <- side2[order(side2[, 2]), ]
-
-  # which side is L/R
-  if (side1[1, 1] > side2[1, 1]) {
-    side1_ <- side1 # side1_ is right
-    side2_ <- side2
-  } else {
-    side1_ <- side2
-    side2_ <- side1
-  }
+  side1 <- mbb[c(1, 2), ]
+  side2 <- mbb[c(3, 4), ]
 
   # get midpoints
-  midpoint_top <- (side1_[2, ] + side2_[2, ]) / 2
-  midpoint_bottom <- (side1_[1, ] + side2_[1, ]) / 2
+  midpoint_top <- (side1[2, ] + side2[2, ]) / 2
+  midpoint_bottom <- (side1[1, ] + side2[1, ]) / 2
 
   # make lat and med box
-  side1_pts <- rbind(side1_, midpoint_top, midpoint_bottom, side1_[1, ])
-  side2_pts <- rbind(side2_, midpoint_top, midpoint_bottom, side2_[1, ])
+  side1_pts <- rbind(side1, midpoint_top, midpoint_bottom, side1[1, ])
+  side2_pts <- rbind(side2, midpoint_top, midpoint_bottom, side2[1, ])
   box1 <- st_polygon(list(side1_pts))
   box2 <- st_polygon(list(side2_pts))
 
@@ -1845,9 +1821,23 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
     side <- foot_side
   }
 
-  # max pressure footprint
+  # footprint coordinates
   sc_df <- sensor_2_polygon(pressure_data, output = "df")[, c(1, 2)]
   sc_df <- sc_df[!duplicated(sc_df), ]
+
+  # medial edge coords
+  unq_y <- unique(sc_df$y)
+  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y)),
+                         y = unq_y)
+  for (i in 1:length(unq_y)) {
+    if (side == "LEFT") {
+      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
+        summarise(me = max(x)) %>% pull(me)
+    } else {
+      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
+        summarise(me = min(x)) %>% pull(me)
+    }
+  }
 
   # convex hull
   df.sf <- sc_df %>%
@@ -1856,29 +1846,8 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
 
   # Bounding box
   mbb <- getMinBBox(as.matrix(sc_df))
-  mbb_coords <- mbb$pts
-
-  # Which sides of BBox are longest?
-  if (dist(mbb_coords[c(1, 2), ]) > dist(mbb_coords[c(2, 3), ])) {
-    side1 <- mbb_coords[c(1, 2), ]
-    side2 <- mbb_coords[c(3, 4), ]
-  } else {
-    side1 <- mbb_coords[c(2, 3), ]
-    side2 <- mbb_coords[c(4, 1), ]
-  }
-
-  # order so lowest first
-  side1 <- side1[order(side1[, 2]), ]
-  side2 <- side2[order(side2[, 2]), ]
-
-  # which side is L/R
-  if (side1[1, 1] > side2[1, 1]) {
-    side1_ <- side1 # side1_ is right
-    side2_ <- side2
-  } else {
-    side1_ <- side2
-    side2_ <- side1
-  }
+  side1 <- mbb[c(1:2), ]
+  side2 <- mbb[c(3:4), ]
 
   # Get distal trisection points and make line
   trisection_left <- side2[1, ] + ((side2[2, ] - side2[1, ]) * 0.67)
@@ -1892,25 +1861,54 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   # ff width
   ff_width <- unname(dist(st_coordinates(tri_int)))
 
-  # heel point
-  heel_left <- side2[1, ] + ((side2[2, ] - side2[1, ]) * 0.15)
-  heel_right <- side1[1, ] + ((side1[2, ] - side1[1, ]) * 0.15)
+  # find the 2 sets of points with the largest distance between them
+  dis <- as.matrix(dist(st_coordinates(fp_chull)))
+  dis <- dis[row(dis) == (col(dis) - 1)]
+  max_2 <- order(dis)[(length(dis) - 1):length(dis)]
 
+  # get medial side
+  try1 <- st_coordinates(fp_chull)[max_2[1], c(1, 2)]
+  try2 <- st_coordinates(fp_chull)[max_2[2], c(1, 2)]
+  try1_med <- which(apply(med_edge, 1, function(x) return(all(x == try1))))
+  try2_med <- which(apply(med_edge, 1, function(x) return(all(x == try2))))
+  if (length(try1_med) == 1 & length(try2_med) == 0) {
+    medline <- st_coordinates(fp_chull)[c(try1_med, try1_med + 1), ]
+  }
+  if (length(try1_med) == 0 & length(try2_med) == 1) {
+    medline <- st_coordinates(fp_chull)[c(try2_med, try2_med + 1), ]
+  }
 
-  # bounding box
+  # cross point of tri line and med_line
+  tri_med_pt <- st_intersection(med_line, tri_line)
 
-  # convex hull
-
-  # trisection
-
-  # ff width
-
-  # heel_point
-
-  # cop
+  # perp med line
+  med_slope <- (medline[2, 2] - medline[1, 2]) / (medline[2, 1] - medline[1, 1])
+  perp_med_line_slope <- -1 / med_slope
+  tri_med_int <- tri_med_pt[2] - (perp_med_line_slope * tri_med_pt[1])
+  perp_med_line <- st_linestring(as.matrix(tri_med_pt, tri_med_int), 2, 2)
 
   # cop_line
+  cop_df <- cop(pressure_data)
+  cop_sf <- cop_df %>%
+    st_as_sf(coords = c("x_coord", "y_coord"))
+  fp_chull <- st_convex_hull(st_combine(cop_sf))
 
+  # cop_straight
+  df <- st_coordinates(fp_chull)[, c(1, 2)]
+  mat <- as.matrix(dist(df))
+  mat[row(mat) == col(mat) + 1]
+
+  # cross point cop and per_med_line
+  cop1_per_med_pt <- st_intersection(cop, perp_med_line)
+
+  # cross point cop straight and per_med_line
+  cop2_per_med_pt <- st_intersection()
+
+  # CPE distance
+  CPE <- st_distance(cop1_per_med_pt, cop2_per_med_pt)
+
+  # calculate CPEI
+  CPEI <- (CPE / ff_width) * 100
 
 
 
@@ -2293,9 +2291,9 @@ getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
 
   ## rotating calipers algorithm using the convex hull
-  H    <- chull(xy)                    # hull indices, vertices ordered clockwise
-  n    <- length(H)                    # number of hull vertices
-  hull <- xy[H, ]                      # hull vertices
+  H    <- chull(xy)           # hull indices, vertices ordered clockwise
+  n    <- length(H)           # number of hull vertices
+  hull <- xy[H, ]             # hull vertices
 
   ## unit basis vectors for all subspaces spanned by the hull edges
   hDir  <- diff(rbind(hull, hull[1,])) # account for circular hull vertices
@@ -2311,19 +2309,19 @@ getMinBBox <- function(xy) {
   projMat <- rbind(huDir, ouDir) %*% t(hull)
 
   ## range of projections and corresponding width/height of bounding rectangle
-  rangeH  <- matrix(numeric(n*2), ncol=2)   # hull edge
-  rangeO  <- matrix(numeric(n*2), ncol=2)   # orth subspace
+  rangeH  <- matrix(numeric(n * 2), ncol = 2)   # hull edge
+  rangeO  <- matrix(numeric(n * 2), ncol = 2)   # orth subspace
   widths  <- numeric(n)
   heights <- numeric(n)
-  for(i in seq(along=H)) {
+  for(i in seq(along = H)) {
     rangeH[i, ] <- range(projMat[  i, ])
-    rangeO[i, ] <- range(projMat[n+i, ])  # orth subspace is in 2nd half
+    rangeO[i, ] <- range(projMat[n + i, ])  # orth subspace is in 2nd half
     widths[i]   <- abs(diff(rangeH[i, ]))
     heights[i]  <- abs(diff(rangeO[i, ]))
   }
 
   ## extreme projections for min-area rect in subspace coordinates
-  eMin  <- which.min(widths*heights)   # hull edge leading to minimum-area
+  eMin  <- which.min(widths * heights)   # hull edge leading to minimum-area
   hProj <- rbind(   rangeH[eMin, ], 0)
   oProj <- rbind(0, rangeO[eMin, ])
 
@@ -2338,7 +2336,32 @@ getMinBBox <- function(xy) {
   oCorn <- basis %*% oPts
   pts   <- t(cbind(hCorn, oCorn[ , c(2, 1)]))
 
-  return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
+  # Which sides of BBox are longest?
+  if (dist(pts[c(1, 2), ]) > dist(pts[c(2, 3), ])) {
+    side1 <- pts[c(1, 2), ]
+    side2 <- pts[c(3, 4), ]
+  } else {
+    side1 <- pts[c(2, 3), ]
+    side2 <- pts[c(4, 1), ]
+  }
+
+  # order so lowest first
+  side1 <- side1[order(side1[, 2]), ]
+  side2 <- side2[order(side2[, 2]), ]
+
+  # which side is L/R
+  if (side1[1, 1] > side2[1, 1]) {
+    side1_ <- side1 # side1_ is right
+    side2_ <- side2
+  } else {
+    side1_ <- side2
+    side2_ <- side1
+  }
+
+  mat <- rbind(side1_, side2_)
+
+  #return(list(pts=pts, width=widths[eMin], height=heights[eMin]))
+  return(mat)
 }
 
 
