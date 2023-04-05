@@ -1082,6 +1082,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
 #' @importFrom zoo rollapply
 #' @importFrom rgeos gBuffer
+#' @importFrom sf st_union
 #' @export
 
 automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
@@ -1730,7 +1731,7 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   max_df <- footprint(pressure_data)
 
   # coordinates
-  sens_coords <- sensor_coords(pressure_data, "all")
+  sens_coords <- sensor_coords(pressure_data)
 
   # side
   if (foot_side == "auto") {
@@ -1746,7 +1747,7 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   # Define convex hull, expanding to include all sensors
   df_sf <- sens_coords %>%
     st_as_sf(coords = c( "x_coord", "y_coord" ))
-  fp_chull <- st_convex_hull(df_sf)
+  fp_chull <- st_convex_hull(st_union(df_sf))
   fp_chull <- st_buffer(fp_chull, pressure_data[[3]][1])
 
   # Simple 3 mask (forefoot, midfoot, and hindfoot)
@@ -1763,30 +1764,47 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   line_55_df <- rbind(side1_55, side2_55)
   line_27 <- st_linestring(as.matrix(line_27_df))
   line_27 <- st_extend_line(line_27, 1)
+  line_27_dist_poly <- st_line2polygon(line_27, 1, "+Y")
+  line_27_prox_poly <- st_line2polygon(line_27, 1, "-Y")
   line_55 <- st_linestring(as.matrix(line_55_df))
   line_55 <- st_extend_line(line_55, 1)
+  line_55_dist_poly <- st_line2polygon(line_55, 1, "+Y")
+  line_55_prox_poly <- st_line2polygon(line_55, 1, "-Y")
 
-
+  ## forefoot, midfoot, and hindfoot masks
+  hf_mask <- st_difference(fp_chull, line_27_dist_poly)
+  mf_mask <- st_difference(fp_chull, line_55_dist_poly)
+  mf_mask <- st_difference(mf_mask, line_27_prox_poly)
+  ff_mask <- st_difference(fp_chull, line_55_prox_poly)
 
 
   # ===========================================================================
 
   # Define angles for dividing lines between metatarsals
   ## Find longest vectors (these are the med and lat edges of the footprint)
+  ### shorten
   unq_y <- unique(sens_coords$y)
-  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y)), y = unq_y)
-  lat_edge <- edge1
-  for (i in 1:length(unq_y)) {
-    med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
-      summarise(me = max(x)) %>% pull(me)
-    lat_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
-      summarise(me = min(x)) %>% pull(me)
+  unq_y_short <- unq_y[-match(tail(sort(unq_y), 3), unq_y)]
+  unq_y_short <- unq_y_short[-match(head(sort(unq_y_short), 3), unq_y_short)]
+
+  ### make edges
+  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y_short)),
+                         y = unq_y_short)
+  lat_edge <- med_edge
+  for (i in 1:length(unq_y_short)) {
+    med_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
+      summarise(me = max(x_coord)) %>% pull(me)
+    lat_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
+      summarise(me = min(x_coord)) %>% pull(me)
   }
   if (side == "RIGHT") {
     x <- med_edge
     med_edge <- lat_edge
     lat_edge <- x
   }
+
+  ### find longest edge
+
 
   z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
   vec_1 <- order(z_dist, decreasing = TRUE)[1]
@@ -1931,95 +1949,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
                                              MTH_45_line[4], MTH_45_line[1] +
                                                1, MTH_45_line[2])))
   }
-
-
-  #-------------------------------------------------------------------------
-
-  # Define heel and midfoot cutting areas. Length of foot is taken as min
-  # bounding box.
-  ## Which sides of BBox are longest?
-  s1d <- sqrt((mbb$pts[2,1] - mbb$pts[1,1]) ^ 2 +
-                (mbb$pts[2,2] - mbb$pts[1,2]) ^ 2)
-  s2d <- sqrt((mbb$pts[3,1] - mbb$pts[2,1]) ^ 2 +
-                (mbb$pts[3,2] - mbb$pts[2,2]) ^ 2)
-  s3d <- sqrt((mbb$pts[4,1] - mbb$pts[3,1]) ^ 2 +
-                (mbb$pts[4,2] - mbb$pts[3,2]) ^ 2)
-  s4d <- sqrt((mbb$pts[1,1] - mbb$pts[4,1]) ^ 2 +
-                (mbb$pts[1,2] - mbb$pts[4,2]) ^ 2)
-  longsides <- order(-c(s1d, s2d, s3d, s4d))
-  longsides <- longsides[c(1,2)]
-
-  ## Get coordinate pairs for longside lines
-  if (is.element(1, longsides) == TRUE & is.element(3, longsides) == TRUE) {
-    longside1 <- as.vector(t(mbb$pts[c(1,2), ]))
-    longside2 <- as.vector(t(mbb$pts[c(3,4), ]))
-  } else if (is.element(2, longsides) == TRUE &
-             is.element(4, longsides) == TRUE) {
-    longside1 <- as.vector(t(mbb$pts[c(2,3), ]))
-    longside2 <- as.vector(t(mbb$pts[c(4,1), ]))
-  }
-
-  ## Reorder coordinates to ensure lowest y is first
-  if (longside1[2] > longside1[4]) {longside1 = longside1[c(3, 4, 1, 2)]}
-  if (longside2[2] > longside2[4]) {longside2 = longside2[c(3, 4, 1, 2)]}
-
-  ## Find coordinate pairs for 27% and 55% BBox lines
-  if(longside1[1] >= longside1[3]) {
-    p1x_27 = (abs(longside1[1] - longside1[3]) * 0.27) - max(longside1[c(1,3)])
-    p1y_27 = ((longside1[4] - longside1[2]) * 0.27) + longside1[2]
-    p1x_55 = (abs(longside1[1] - longside1[3]) * 0.55) - max(longside1[c(1,3)])
-    p1y_55 = ((longside1[4] - longside1[2]) * 0.55) + longside1[2]
-  } else if(longside1[1] < longside1[3]) {
-    p1x_27 = (abs(longside1[1] - longside1[3]) * 0.27) + min(longside1[c(1,3)])
-    p1y_27 = ((longside1[4] - longside1[2]) * 0.27) + longside1[2]
-    p1x_55 = (abs(longside1[1] - longside1[3]) * 0.55) + min(longside1[c(1,3)])
-    p1y_55 = ((longside1[4] - longside1[2]) * 0.55) + longside1[2]
-  }
-
-  if (longside2[1] >= longside2[3]) {
-    p2x_27 = (abs(longside2[1] - longside2[3]) * 0.27) - max(longside2[c(1,3)])
-    p2y_27 = ((longside2[4] - longside2[2]) * 0.27) + longside2[2]
-    p2x_55 = (abs(longside2[1] - longside2[3]) * 0.55) - max(longside2[c(1,3)])
-    p2y_55 = ((longside2[4] - longside2[2]) * 0.55) + longside2[2]
-  } else if (longside2[1] < longside2[3]) {
-    p2x_27 = (abs(longside2[1] - longside2[3]) * 0.27) + min(longside2[c(1,3)])
-    p2y_27 = ((longside2[4] - longside2[2]) * 0.27) + longside2[2]
-    p2x_55 = (abs(longside2[1] - longside2[3]) * 0.55) + min(longside2[c(1,3)])
-    p2y_55 = ((longside2[4] - longside2[2]) * 0.55) + longside2[2]
-  }
-
-  ## Make 27% and 55% line vectors
-  l_27 <- c(p1x_27, p1y_27, p2x_27, p2y_27)
-  l_55 <- c(p1x_55, p1y_55, p2x_55, p2y_55)
-
-  ## Mid 2nd line angle
-  alpha_2 <- (MTH_12_alpha + MTH_23_alpha) / 2
-
-  ## Find where 2nd mid line and 27% and 55% lines cross
-  l27_int <- as.vector(line_int(MTH_22_line, l_27))
-  l55_int <- as.vector(line_int(MTH_22_line, l_55))
-
-  ## Eqn for perpindicular lines
-  m3 <- -1 / ((MTH_22_line[4] - MTH_22_line[2]) /
-                (MTH_22_line[3] - MTH_22_line[1]))
-  c3 <- l27_int[2] - (m3 * l27_int[1])
-  c4 <- l55_int[2] - (m3 * l55_int[1])
-  l27 <- c(1, ((m3 * 1) + c3), -1, ((m3 * -1) + c3))
-  l55 <- c(1, ((m3 * 1) + c4), -1, ((m3 * -1) + c4))
-
-  ## Form polygons that will make cuts
-  heel_cut_dist <- readWKT(vector_to_polygon(c(l27[1], l27[2], l27[3], l27[4],
-                                               l27[3], l27[4] + 1, l27[1],
-                                               l27[2] + 1)))
-  mfoot_cut_prox <- readWKT(vector_to_polygon(c(l27[1], l27[2], l27[3], l27[4],
-                                                l27[3], l27[4] - 1, l27[1],
-                                                l27[2] - 1)))
-  mfoot_cut_dist <- readWKT(vector_to_polygon(c(l55[1], l55[2], l55[3], l55[4],
-                                                l55[3], l55[4] + 1, l55[1],
-                                                l55[2] + 1)))
-  ffoot_cut_prox <- readWKT(vector_to_polygon(c(l55[1], l55[2], l55[3], l55[4],
-                                                l55[3], l55[4] - 1,
-                                                l55[1], l55[2] - 1)))
 
 
   # ===========================================================================
@@ -2690,7 +2619,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   if (variable == "peak_mask") {
     peak_mask <- rep(NA, times = length(masks))
     for (i in 1:length(overlap_list)) {
-      peak_sens[i] <- sum(max_df[act_sens[overlap_list[[i]],]]) /
+      peak_sens[i] <- sum(max_df[act_sens[overlap_list[[i]],]]) / area
     }
   }
 
@@ -3159,9 +3088,9 @@ generate_colors <- function(df, col_type = "default", break_values,
   return (df)
 }
 
-st_extend_line <- function(line, distance, end = "BOTH")
-{
-  if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1) stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
+st_extend_line <- function(line, distance, end = "BOTH") {
+  if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1)
+    stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
 
   M <- sf::st_coordinates(line)[,1:2]
   keep <- !(end == c("TAIL", "HEAD"))
@@ -3186,4 +3115,48 @@ st_extend_line <- function(line, distance, end = "BOTH")
   if (is.list(line)) newline <- sf::st_sfc(newline, crs = sf::st_crs(line))
 
   return(newline)
+}
+
+st_line2polygon <- function(mat, distance, direction) {
+  # +Y
+  if (direction == "+Y" & mat[1, 1] > mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 1], mat[2, 2] + distance),
+                     c(mat[1, 1], mat[1, 2] + distance), mat[1, ])
+  }
+  if (direction == "+Y" & mat[1, 1] < mat[2, 1]) {
+    mat_pts <- rbind(mat[2, ], mat[1, ], c(mat[1, 1], mat[1, 2] + distance),
+                     c(mat[2, 1], mat[2, 2] + distance), mat[2, ])
+  }
+  # -Y
+  if (direction == "-Y" & mat[1, 1] > mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 1], mat[2, 2] - distance),
+                     c(mat[1, 1], mat[1, 2] - distance), mat[1, ])
+  }
+  if (direction == "-Y" & mat[1, 1] < mat[2, 1]) {
+    mat_pts <- rbind(mat[2, ], mat[1, ], c(mat[1, 1], mat[1, 2] - distance),
+                     c(mat[2, 2], mat[2, 1] - distance), mat[2, ])
+  }
+
+  # +X
+  if (direction == "+X" & mat[1, 1] > mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 1]), c(mat[2, 2] + distance),
+                     c(mat[1, 1], mat[1, 2] + distance), mat[1, ])
+  }
+  if (direction == "+X" & mat[1, 1] < mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 2]), c(mat[2, 1] + 1),
+                     c(mat[1, 2], mat[1, 1] + 1), mat[1, ])
+  }
+
+  # -X
+  if (direction == "-X" & mat[1, 1] > mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 1]), c(mat[2, 2] + distance),
+                     c(mat[1, 1], mat[1, 2] + distance), mat[1, ])
+  }
+  if (direction == "-X" & mat[1, 1] < mat[2, 1]) {
+    mat_pts <- rbind(mat, c(mat[2, 2]), c(mat[2, 1] + 1),
+                     c(mat[1, 2], mat[1, 1] + 1), mat[1, ])
+  }
+
+  # make polygon
+  mat_poly <- st_polygon(list(mat_pts))
 }
