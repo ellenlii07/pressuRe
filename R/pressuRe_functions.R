@@ -15,7 +15,6 @@
 # global pressure_import function (leave for V2)
 # cop for pedar
 # add progress bar for animation
-# helper function for ordering bounding box...or roll into get minBBox?
 
 # data list:
 ## Array. pressure data
@@ -845,6 +844,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @param break_colors Vector. If plot_colors is "custom", colors to use.
 #' Should be one shorter than break_values
 #' @param plot Logical. If TRUE, plot will be displayed
+#' @param legend Logical. If TRUE, legend will be added to plot
 #' @return ggplot plot object
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
@@ -860,7 +860,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           step_n, plot_COP = FALSE, plot_outline = FALSE,
                           plot_colors = "default", break_values, break_colors,
-                          plot = TRUE) {
+                          plot = TRUE, legend = TRUE) {
   # set global variables
   x <- y <- id <- cols <- x_coord <- y_coord <- NULL
 
@@ -903,13 +903,18 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   if (plot_colors == "default") {
     break_colors <- c("grey","lightblue", "darkblue","green","yellow",
                       "red", "pink")
+    break_values <- c(0, 40, 60, 100, 150, 220, 300)
   }
 
   ## plot
   g <- ggplot()
-  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = cols),
-                        color = NA, lwd = 0)
-  g <- g + scale_fill_manual(values = break_colors)
+  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))#,
+                        #color = NA, lwd = 0)
+  g <- g + binned_scale("fill", "foo",
+                        ggplot2:::binned_pal(scales::manual_pal(break_colors)),
+                        guide = "coloursteps", breaks = break_values,
+                        limits = c(0, max(cor$value)), show.limits = FALSE,
+                        name = "Pressure (kPa)")
   g <- g + scale_x_continuous(expand = c(0, 0), limits = c(0, x_lim))
   g <- g + scale_y_continuous(expand = c(0, 0), limits = c(0, y_lim))
   g <- g + coord_fixed()
@@ -933,7 +938,8 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + theme_void()
   g <- g + theme(panel.background = element_rect(fill = "white",
                                                  colour = "white"),
-                 legend.position = "none")
+                 legend.box.spacing = unit(pressure_data[[3]][1] * 100, "cm"))
+  if (legend == FALSE) {g <- theme(legend.position = "none")}
 
   # display plot immediately if requested
   if (plot == TRUE) {print(g)}
@@ -1803,7 +1809,12 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
     lat_edge <- x
   }
 
-  ### find longest edge
+  ### convex hulls of edges
+  med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
+  med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
+  lat_edge_sf <- lat_edge %>% st_as_sf(coords = c("x", "y"))
+  lat_edge_chull <- st_convex_hull(st_combine(lat_edge_sf))
+
 
 
   z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
@@ -3159,4 +3170,33 @@ st_line2polygon <- function(mat, distance, direction) {
 
   # make polygon
   mat_poly <- st_polygon(list(mat_pts))
+}
+
+edge_line <- function(mat) {
+  # determine medial line
+  ## medial edge coords
+  unq_y <- unique(sc_df$y)
+  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y)),
+                         y = unq_y)
+  for (i in 1:length(unq_y)) {
+    if (side == "LEFT") {
+      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
+        summarise(me = max(x)) %>% pull(me)
+    } else {
+      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
+        summarise(me = min(x)) %>% pull(me)
+    }
+  }
+
+  ## convex hull of medial edge
+  med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
+  med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
+
+  ## longest med edge line
+  me_dis <- as.matrix(dist(st_coordinates(med_edge_chull)))
+  me_dis <- me_dis[row(me_dis) == (col(me_dis) - 1)]
+  me_max <- order(me_dis)[length(me_dis)]
+  med_side <- st_coordinates(med_edge_chull)[c(me_max, me_max + 1), c(1, 2)]
+  med_side_line <- st_linestring(med_side)
+  med_side_line <- st_extend_line(med_side_line, 0.1)
 }
