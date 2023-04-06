@@ -19,6 +19,7 @@ Imports:
     magick,
     magrittr,
     rgeos,
+    scales,
     sf,
     stringr,
     zoo

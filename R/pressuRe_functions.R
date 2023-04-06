@@ -1,9 +1,7 @@
 # to do
-# fscan import function filepath to fscan example
 # load_footscan function
-# CPEI plot and edit need to be built into function
+# CPEI manual edit to be built into function
 # more output variables need to be added to  mask analysis
-# automask to work on different sensors (currently just emed) 0.0025s in sensor coords
 # more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
 # area curve (and others) to work with insole data
@@ -11,10 +9,10 @@
 # add support for pliance
 # edit mask needs to be written
 # add more input tests to throw errors
-# legend for plots
 # global pressure_import function (leave for V2)
 # cop for pedar
 # add progress bar for animation
+# automask2: toe line, then for edges if standard doesn't work, fit line to edge point (truncated) then move till none outside line
 
 # data list:
 ## Array. pressure data
@@ -246,7 +244,8 @@ load_pedar <- function(pressure_filepath) {
 #'   \item events. List
 #'  }
 #'  @examples
-#'  pressure_data <- load_fscan("inst/extdata/)
+#' fscan_data <- system.file("extdata", "fscan_testR.lst", package = "pressuRe")
+#' pressure_data <- load_fscan(fscan_data)
 #'  @importFrom
 #'  @export
 
@@ -854,7 +853,8 @@ footprint <- function(pressure_data, variable = "max", frame,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
 #'               break_colors = c("blue", "green", "yellow", "red", "pink"))
 #' @importFrom ggplot2 ggplot aes geom_raster geom_polygon scale_fill_manual
-#' theme geom_point element_rect
+#' theme geom_point element_rect binned_scale unit
+#' @importFrom scales manual_pal
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
@@ -862,7 +862,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                           plot_colors = "default", break_values, break_colors,
                           plot = TRUE, legend = TRUE) {
   # set global variables
-  x <- y <- id <- cols <- x_coord <- y_coord <- NULL
+  x <- y <- id <- cols <- x_coord <- y_coord <- value <- NULL
 
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
@@ -911,7 +911,8 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))#,
                         #color = NA, lwd = 0)
   g <- g + binned_scale("fill", "foo",
-                        ggplot2:::binned_pal(scales::manual_pal(break_colors)),
+                        #ggplot2:::binned_pal(scales::manual_pal(break_colors)),
+                        binned_pal(scales::manual_pal(break_colors)),
                         guide = "coloursteps", breaks = break_values,
                         limits = c(0, max(cor$value)), show.limits = FALSE,
                         name = "Pressure (kPa)")
@@ -1046,15 +1047,21 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
   # plot
   img_fns <- rep(NA, length.out = n_frames)
+  pb <- txtProgressBar(min = 1, max = n_frames)
   for (i in 1:n_frames) {
     # make plot
     g <- plot_pressure(pressure_data, variable = "frame", frame = i,
                        plot_colors = plot_colors, plot = FALSE)
     img_fn <- paste0(temp_dir, "/img", str_pad(i, nchar(n_frames),
                                                pad = "0"), ".png")
-    ggsave(img_fn, g, dpi = dpi)
+    ggsave(img_fn, g, width = 6.45, height = 5.77, dpi = dpi)
     img_fns[i] <- img_fn
+    setTxtProgressBar(pb, i)
   }
+
+  # update progress
+  close(pb)
+  print("generating and saving anaimation")
 
   # load images back in
   allInfo <- image_info(image_read(img_fns))
@@ -1784,8 +1791,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   ff_mask <- st_difference(fp_chull, line_55_prox_poly)
 
 
-  # ===========================================================================
-
   # Define angles for dividing lines between metatarsals
   ## Find longest vectors (these are the med and lat edges of the footprint)
   ### shorten
@@ -1868,8 +1873,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
     MTH_45_alpha = med_v_alpha - (0.81 * alpha)
   }
 
-
-  # ===========================================================================
 
   # Define cutting masks for MTH areas
   ## Find coord pairs for MTH and mid 2nd division lines
@@ -1961,8 +1964,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
                                                1, MTH_45_line[2])))
   }
 
-
-  # ===========================================================================
 
   # Define toe area
   ## Make smaller dataframes
@@ -2195,8 +2196,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   toe_cut_prox <- readWKT(vector_to_polygon(toe_cut_prox))
 
 
-  # ===========================================================================
-
   # Make all masks
   heel_mask <- gDifference(chull_ex, heel_cut_dist)
   midfoot_mask <- gDifference(chull_ex, mfoot_cut_prox)
@@ -2245,8 +2244,6 @@ automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
                     MTH_4_mask = MTH_4_mask_,
                     MTH_5_mask = MTH_5_mask_)
 
-
-  # ===========================================================================
 
   # Plot Footprint and masks if required
   if (plot == TRUE) {
@@ -2367,13 +2364,13 @@ edit_mask <- function(pressure_data) {
 #' @importFrom dplyr pull summarise
 #' @export
 
-cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
+cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
   # check set up
-  if (interactive == FALSE)
+  if (interactive() == FALSE)
     stop("we recommend user reviews each measurement")
 
   # global variables
-  x <- y <- me <- NULL
+  x <- y <- me <- X <- Y <- NULL
 
   # side
   if (foot_side == "auto") {
@@ -2484,6 +2481,28 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   # calculate CPEI
   CPEI <- (CPE / ff_width) * 100
 
+  # plot
+  if (plot_result == TRUE) {
+    # make CPEI dfs for plotting
+    med_side_df <- as.data.frame(med_side)
+    cop_side_df <- as.data.frame(cop_side)
+    cpe_df <- as.data.frame(rbind(cop1_per_med_pt, cop2_per_med_pt))
+    colnames(cpe_df) <- c("X", "Y")
+
+    # plot
+    g <- plot_pressure(pressure_data, plot_colors = "custom",
+                       break_values = c(100, 750),
+                       break_colors = c("lightgrey", "grey", "darkgrey"),
+                       plot_COP = TRUE)
+    g <- g + geom_line(data = med_side_df, aes(X, Y), linetype = "dashed",
+                       color = "black", size = 1.5)
+    g <- g + geom_line(data = cpe_df, aes(X, Y), color = "black",
+                       size = 2)
+    g <- g + geom_line(data = cop_side_df, aes(X, Y), colour = "blue",
+                       alpha = 0.8)
+    print(g)
+  }
+
   # manual select function
   #manually_select <- function(n_points, mess) {
   #  message(mess)
@@ -2501,7 +2520,7 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
   #g <- g + geom_point(data = end_point, aes (x = x_coord, y = y_coord), shape = 2)
   #g <- g + geom_line(data = m_bor, aes(x = x_coord, y = y_coord), colour = "purple")
   #g <- g + geom_line(data = l_bor, aes(x = x_coord, y = y_coord), colour = "orange")
-  #print(g)
+  print(g)
   #auto_worked <- readline("Have points been correctly identified? c: manually select cop; a: manually select all")
 
   ## if automatic identification failed, redo manually
@@ -2525,18 +2544,6 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
     # select points
   #  start_point <- manually_select(1, "select the most medial point near the start of the COP")
   #  end_point <- manually_select(1, "select the most medial point near the end of the COP")
-  #}
-
-  # plot
-  #if (plot_result == TRUE) {
-  #  g <- plot_footprint(pressure_frames, plot_COP = TRUE)
-  #  g <- g + geom_line(data = ff_line, aes(x_coord, y_coord),
-  #                     linetype = "dashed")
-  #  g <- g + geom_line(data = CPE_df, aes(x_coord, y_coord),
-  #                     size = 2)
-  #  g <- g + geom_line(data = cpei_con, aes(x_coord, y_coord), colour = "blue",
-  #                     alpha = 0.8)
-  #  print(g)
   #}
 
   # return CPEI
@@ -2570,7 +2577,7 @@ cpei <- function(pressure_data, foot_side, plot_result = FALSE) {
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
   # set global variables
-  act_sens_poly <- act_sens <- NULL
+  act_sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
 
   # set up mask/sensor areas
   ## sensor area
@@ -2625,8 +2632,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     }
   }
 
-  # Analyse regions for peak regional pressure (defined as the maximum mean
-  # pressure of active sensors in region during the trial)
+  # Analyse regions for peak regional pressure (defined as the pressure
+  # averaged over the mask)
   if (variable == "peak_mask") {
     peak_mask <- rep(NA, times = length(masks))
     for (i in 1:length(overlap_list)) {
@@ -2667,7 +2674,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for maximum force during the trial
   if (variable == "force_peak") {
-
+    peak_force <- rep(NA, times = length(masks))
   }
 
   # Analyse regions for force throughout the trial (outputs vector)
@@ -3199,4 +3206,10 @@ edge_line <- function(mat) {
   med_side <- st_coordinates(med_edge_chull)[c(me_max, me_max + 1), c(1, 2)]
   med_side_line <- st_linestring(med_side)
   med_side_line <- st_extend_line(med_side_line, 0.1)
+}
+
+binned_pal <- function(palette) {
+  function(x) {
+    palette(length(x))
+  }
 }
