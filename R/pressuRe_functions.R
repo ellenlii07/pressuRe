@@ -11,7 +11,7 @@
 # add more input tests to throw errors
 # global pressure_import function (leave for V2)
 # cop for pedar
-# add progress bar for animation
+# fix legend on animation
 # automask2: toe line, then for edges if standard doesn't work, fit line to edge point (truncated) then move till none outside line
 
 # data list:
@@ -1047,7 +1047,8 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
   # plot
   img_fns <- rep(NA, length.out = n_frames)
-  pb <- txtProgressBar(min = 1, max = n_frames)
+  pb <- txtProgressBar(min = 1, max = n_frames, style = 3)
+  print("processing images")
   for (i in 1:n_frames) {
     # make plot
     g <- plot_pressure(pressure_data, variable = "frame", frame = i,
@@ -1061,7 +1062,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
   # update progress
   close(pb)
-  print("generating and saving anaimation")
+  print("generating and saving animation")
 
   # load images back in
   allInfo <- image_info(image_read(img_fns))
@@ -1073,7 +1074,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
   # save animation
   magick::image_write(animation, file_name)
   file.remove(img_fns)
-  gc()
+  invisible(gc())
 }
 
 
