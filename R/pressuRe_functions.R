@@ -11,6 +11,7 @@
 # add more input tests to throw errors
 # global pressure_import function (leave for V2)
 # cop for pedar
+# check/make pedar work for a lot of these functions
 # fix legend on animation
 # automask2: toe line, then for edges if standard doesn't work, fit line to edge point (truncated) then move till none outside line
 
@@ -1025,6 +1026,7 @@ pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
 #' @importFrom ggplot2 ggplot aes geom_polygon scale_x_continuous
 #' scale_y_continuous coord_fixed theme_void xlim ylim ggsave
 #' @importFrom grDevices dev.off
+#' @importFrom utils txtProgressBar setTxtProgressBar
 #' @export
 
 animate_pressure <- function(pressure_data, plot_colors = "default", fps,
@@ -1741,6 +1743,10 @@ automask <- function(pressure_data, foot_side, sens = 4, plot = FALSE) {
 
 automask2 <- function(pressure_data, foot_side, mask_scheme, sens = 4,
                       plot = FALSE) {
+  # global variables
+  x_coord <- y_coord <- me <- heel_cut_dist <- mfoot_cut_prox <-
+    ffoot_cut_prox <- NULL
+
   # Find footprint (max)
   max_df <- footprint(pressure_data)
 
@@ -2873,7 +2879,9 @@ sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
 
   # remove inactive sensors
   P <- as.vector(sens)
-  coords <- coords[which(P > 0), ]
+  if (pressure_image != "all") {
+    coords <- coords[which(P > 0), ]
+  }
 
   # return sensor coordinates
   return(coords)
@@ -3178,6 +3186,75 @@ st_line2polygon <- function(mat, distance, direction) {
 
   # make polygon
   mat_poly <- st_polygon(list(mat_pts))
+}
+
+#' @title Get toe line
+#' @description Calculates line proximal to toes
+#' @param pressure_data
+#' @param side
+#' @importFrom leastcostpath create_lcp
+toe_line <- function(pressure_data, side) {
+  # find shortest path from 1/3 medial to 1/2 lateral
+  ## active sensor coords
+  sc_df <- sensor_2_polygon(pressure_data, output = "df")[, c(1, 2)]
+  sc_df <- sc_df[!duplicated(sc_df), ]
+
+  ## bounding box
+  mbb <- getMinBBox(as.matrix(sc_df))
+  side1 <- mbb[c(1:2), ]
+  side2 <- mbb[c(3:4), ]
+
+  ## convext hull
+  df.sf <- sc_df %>%
+    st_as_sf(coords = c( "x", "y" ))
+  fp_chull <- st_convex_hull(st_combine(df.sf))
+
+  ## Medial line at 80% and lateral line at 65%
+  if (foot_side == "RIGHT") {
+    medial_line_pt1 <- side2[1, ] + ((side2[2, ] - side2[1, ]) * 0.8)
+    lateral_line_pt1 <- side1[1, ] + ((side1[2, ] - side1[1, ]) * 0.65)
+  }
+  if (foot_side == "LEFT") {
+    medial_line_pt1 <- side1[1, ] + ((side1[2, ] - side1[1, ]) * 0.8)
+    lateral_line_pt1 <- side2[1, ] + ((side2[2, ] - side1[2, ]) * 0.65)
+  }
+
+  ## find path
+  fp_vals <- as.vector(footprint(pressure_data))
+  fp_coords <- sensor_coords(pressure_data, pressure_image = "all")
+  fp_sf <- st_as_sf(x = fp_coords, coords = c("x_coord", "y_coord"))
+
+  # which sensors are in convex hull and are zero
+  ch_int <- st_intersects(fp_chull, fp_sf)
+  for (i in 1:length(ch_int[[1]])) {
+    if (fp_vals[ch_int[[1]][i]] == 0) {fp_vals[ch_int[[1]][i]] <- 1}
+  }
+
+  pad_col <- rep(0.01, length.out = ncol(fp_coords))
+  fp <- cbind(fp_coords, fp_vals)
+  #fp <- cbind(pad_col, pad_col, fp, pad_col, pad_col)
+  r <- raster::rasterFromXYZ(fp)
+  #exts <- raster::extent(0, pressure_data[[3]][2] * ncol(fp),
+  #                       0, pressure_data[[3]][1] * nrow(fp))
+  #r <- raster::setExtent(r, exts)
+  cs <- leastcostpath::create_slope_cs(dem = r, cost_function = 'tobler',
+                                       neighbours = 32)
+  loc1 <- unname(round(medial_line_pt1 / 0.005) * 0.005)
+  loc2 <- unname(round(lateral_line_pt1 / 0.005) * 0.005)
+  loc1 <- sp::SpatialPoints(cbind(loc1[1], loc1[2]))
+  loc2 <- sp::SpatialPoints(cbind(loc2[1], loc2[2]))
+  toe_path <- leastcostpath::create_lcp(cost_surface = cs, origin = loc1,
+                                        destination = loc2,
+                                        directional = TRUE)
+  toe_path <- st_as_sf(toe_path)
+  toe_path_df <- as.data.frame(st_coordinates(toe_path)[, c(1, 2)])
+  g <- plot_pressure(pressure_data)
+  g <- g + geom_path(data = toe_path_df, aes(x = X, y = Y), color = "red")
+  g
+
+  #sp::plot(raster::raster(cs))
+  #sp::plot(toe_path[[1]], add = T, col = "red")
+  # find if crosses chull earlier
 }
 
 edge_line <- function(mat) {
