@@ -16,7 +16,6 @@ Imports:
     dplyr,
     ggmap,
     ggplot2,
-    leastcostpath,
     magick,
     magrittr,
     rgeos,

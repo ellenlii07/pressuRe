@@ -912,7 +912,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))#,
                         #color = NA, lwd = 0)
   g <- g + binned_scale("fill", "foo",
-                        #ggplot2:::binned_pal(scales::manual_pal(break_colors)),
                         binned_pal(scales::manual_pal(break_colors)),
                         guide = "coloursteps", breaks = break_values,
                         limits = c(0, max(cor$value)), show.limits = FALSE,
@@ -3190,9 +3189,10 @@ st_line2polygon <- function(mat, distance, direction) {
 
 #' @title Get toe line
 #' @description Calculates line proximal to toes
-#' @param pressure_data
-#' @param side
-#' @importFrom leastcostpath create_lcp
+#' @param pressure_data List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time
+#' @param side String
+#' @importFrom movecost
 toe_line <- function(pressure_data, side) {
   # find shortest path from 1/3 medial to 1/2 lateral
   ## active sensor coords
@@ -3237,15 +3237,15 @@ toe_line <- function(pressure_data, side) {
   #exts <- raster::extent(0, pressure_data[[3]][2] * ncol(fp),
   #                       0, pressure_data[[3]][1] * nrow(fp))
   #r <- raster::setExtent(r, exts)
-  cs <- leastcostpath::create_slope_cs(dem = r, cost_function = 'tobler',
-                                       neighbours = 32)
+  #cs <- leastcostpath::create_slope_cs(dem = r, cost_function = 'tobler',
+  #                                     neighbours = 32)
   loc1 <- unname(round(medial_line_pt1 / 0.005) * 0.005)
   loc2 <- unname(round(lateral_line_pt1 / 0.005) * 0.005)
   loc1 <- sp::SpatialPoints(cbind(loc1[1], loc1[2]))
   loc2 <- sp::SpatialPoints(cbind(loc2[1], loc2[2]))
-  toe_path <- leastcostpath::create_lcp(cost_surface = cs, origin = loc1,
-                                        destination = loc2,
-                                        directional = TRUE)
+  #toe_path <- leastcostpath::create_lcp(cost_surface = cs, origin = loc1,
+  #                                      destination = loc2,
+  #                                      directional = TRUE)
   toe_path <- st_as_sf(toe_path)
   toe_path_df <- as.data.frame(st_coordinates(toe_path)[, c(1, 2)])
   g <- plot_pressure(pressure_data)
