@@ -940,7 +940,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + theme(panel.background = element_rect(fill = "white",
                                                  colour = "white"),
                  legend.box.spacing = unit(pressure_data[[3]][1] * 100, "cm"))
-  if (legend == FALSE) {g <- theme(legend.position = "none")}
+  if (legend == FALSE) {g <- g + theme(legend.position = "none")}
 
   # display plot immediately if requested
   if (plot == TRUE) {print(g)}
