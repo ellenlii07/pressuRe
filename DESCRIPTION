@@ -18,7 +18,6 @@ Imports:
     ggplot2,
     magick,
     magrittr,
-    rgeos,
     scales,
     sf,
     stringr,

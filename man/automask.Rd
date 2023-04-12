@@ -4,7 +4,7 @@
 \alias{automask}
 \title{automask footprint}
 \usage{
-automask(pressure_data, foot_side, sens = 4, plot = FALSE)
+automask(pressure_data, foot_side, mask_scheme, sens = 4, plot = FALSE)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
@@ -12,6 +12,8 @@ of the measurement. z dimension represents time}
 
 \item{foot_side}{String. "RIGHT", "LEFT", or "auto". Auto uses
 auto_detect_side function}
+
+\item{mask_scheme}{List.}
 
 \item{sens}{Numeric. Number of frames per second in animation}
 
