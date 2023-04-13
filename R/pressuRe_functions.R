@@ -1177,198 +1177,67 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme, sens = 4,
   edges <- edge_lines(pressure_data, side)
 
   ## angle between lines
+  med_pts <- st_coordinates(edges[[1]])
+  lat_pts <- st_coordinates(edges[[2]])
+  med_line_angle <- (atan((med_pts[2, 1] - med_pts[1, 1]) /
+                                 (med_pts[2, 2] - med_pts[1, 2]))) * 180 / pi
+  lat_line_angle <- (atan((lat_pts[2, 1] - lat_pts[1, 1]) /
+                                 (lat_pts[2, 2] - lat_pts[1, 2]))) * 180 / pi
+  alpha <- lat_line_angle - med_line_angle
+
 
   ## intersection point
+  med_lat_int <- st_intersection(edges[[1]], edges[[2]])
 
   ## rotation angles for 2-4 lines
+  MT_hx_alpha <- med_line_angle + (0.33 * alpha)
+  MT_12_alpha <- med_line_angle + (0.3  * alpha)
+  MT_23_alpha <- med_line_angle + (0.47 * alpha)
+  MT_34_alpha <- med_line_angle + (0.64 * alpha)
+  MT_45_alpha <- med_line_angle + (0.81 * alpha)
 
-  ## polys for 2-4 cuts
+  ## polys for met and hal cuts
+  if (side == "RIGHT") {lat_dir <- "+X"; med_dir <- "-X"}
+  if (side == "LEFT") {lat_dir <- "-X"; med_dir <- "+X"}
+  MT_hx_line <- rot_line(edges[[1]], MT_hx_alpha)
+  MT_hx_poly_lat <- st_line2polygon(st_coordinates(MT_hx_line), 1, lat_dir)
+  MT_hx_poly_med <- st_line2polygon(st_coordinates(MT_hx_line), 1, med_dir)
+  MT_12_line <- rot_line(edges[[1]], MT_12_alpha)
+  MT_12_poly_lat <- st_line2polygon(st_coordinates(MT_12_line), 1, lat_dir)
+  MT_12_poly_med <- st_line2polygon(st_coordinates(MT_12_line), 1, med_dir)
+  MT_23_line <- rot_line(edges[[1]], MT_23_alpha)
+  MT_23_poly_lat <- st_line2polygon(st_coordinates(MT_23_line), 1, lat_dir)
+  MT_23_poly_med <- st_line2polygon(st_coordinates(MT_23_line), 1, med_dir)
+  MT_34_line <- rot_line(edges[[1]], MT_34_alpha)
+  MT_34_poly_lat <- st_line2polygon(st_coordinates(MT_34_line), 1, lat_dir)
+  MT_34_poly_med <- st_line2polygon(st_coordinates(MT_34_line), 1, med_dir)
+  MT_45_line <- rot_line(edges[[1]], MT_45_alpha)
+  MT_45_poly_lat <- st_line2polygon(st_coordinates(MT_45_line), 1, lat_dir)
+  MT_45_poly_med <- st_line2polygon(st_coordinates(MT_45_line), 1, med_dir)
 
   ## make met masks
-
-
-  ## Find longest vectors (these are the med and lat edges of the footprint)
-  ### shorten
-  #unq_y <- unique(sens_coords$y)
-  #unq_y_short <- unq_y[-match(tail(sort(unq_y), 3), unq_y)]
-  #unq_y_short <- unq_y_short[-match(head(sort(unq_y_short), 3), unq_y_short)]
-
-  ### make edges
-  #med_edge <- data.frame(x = rep(NA, length.out = length(unq_y_short)),
-  #                       y = unq_y_short)
-  #lat_edge <- med_edge
-  #for (i in 1:length(unq_y_short)) {
-  #  med_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
-  #    summarise(me = max(x_coord)) %>% pull(me)
-  #  lat_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
-  #    summarise(me = min(x_coord)) %>% pull(me)
-  #}
-  #if (side == "RIGHT") {
-  #  x <- med_edge
-  #  med_edge <- lat_edge
-  #  lat_edge <- x
-  #}
-
-  ### convex hulls of edges
-  #med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
-  #med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
-  #lat_edge_sf <- lat_edge %>% st_as_sf(coords = c("x", "y"))
-  #lat_edge_chull <- st_convex_hull(st_combine(lat_edge_sf))
-
-  # z_dist <- Mod(diff(chull_ex_df$x + 1i * chull_ex_df$y))
-  # vec_1 <- order(z_dist, decreasing = TRUE)[1]
-  # vec_2 <- order(z_dist, decreasing = TRUE)[2]
-  #
-  # ## Get coords for longest vector, reorder so lowest (y-axis) is first
-  # vec_1 <- c(chull_ex_df[vec_1, 1], chull_ex_df[vec_1, 2],
-  #            chull_ex_df[vec_1 + 1, 1], chull_ex_df[vec_1 + 1, 2])
-  # vec_2 <- c(chull_ex_df[vec_2, 1], chull_ex_df[vec_2,2],
-  #            chull_ex_df[vec_2 + 1, 1], chull_ex_df[vec_2 + 1, 2])
-  # if (vec_1[2] > vec_1[4]) {vec_1 <- c(vec_1[3], vec_1[4], vec_1[1], vec_1[2])}
-  # if (vec_2[2] > vec_2[4]) {vec_2 <- c(vec_2[3], vec_2[4], vec_2[1], vec_2[2])}
-  #
-  # ## Define as lat or med
-  # if (side == "RIGHT" & sum(vec_1[c(1,3)]) > sum(vec_2[c(1,3)])) {
-  #   lat_side = vec_1
-  #   med_side = vec_2
-  # } else if (side == "RIGHT" & sum(vec_1[c(1,3)]) < sum(vec_2[c(1,3)])) {
-  #   lat_side = vec_2
-  #   med_side = vec_1
-  # } else if (side == "LEFT" & sum(vec_1[c(1,3)]) > sum(vec_2[c(1,3)])) {
-  #   lat_side = vec_2
-  #   med_side = vec_1
-  # } else if (side == "LEFT" & sum(vec_1[c(1,3)]) < sum(vec_2[c(1,3)])) {
-  #   lat_side = vec_1
-  #   med_side = vec_2
-  # }
-  #
-  # ## Find angle between vectors
-  # lat_v_ang <- c(lat_side[3] - lat_side[1], lat_side[4] - lat_side[2])
-  # med_v_ang <- c(med_side[3] - med_side[1], med_side[4] - med_side[2])
-  # lat_v_alpha <- atan2(lat_v_ang[2], lat_v_ang[1]) * (180 / pi)
-  # med_v_alpha <- atan2(med_v_ang[2], med_v_ang[1]) * (180 / pi)
-  # alpha <- abs(lat_v_alpha - med_v_alpha)
-  #
-  # # get angle vectors
-  # if (side == "LEFT") {
-  #   MTH_hx_alpha = med_v_alpha + (0.33 * alpha)
-  #   MTH_12_alpha = med_v_alpha + (0.3  * alpha)
-  #   MTH_22_alpha = med_v_alpha + (0.38 * alpha)
-  #   MTH_23_alpha = med_v_alpha + (0.47 * alpha)
-  #   MTH_34_alpha = med_v_alpha + (0.64 * alpha)
-  #   MTH_45_alpha = med_v_alpha + (0.81 * alpha)
-  # } else if (side == "RIGHT") {
-  #   MTH_hx_alpha = med_v_alpha - (0.33 * alpha)
-  #   MTH_12_alpha = med_v_alpha - (0.3 * alpha)
-  #   MTH_22_alpha = med_v_alpha - (0.38 * alpha)
-  #   MTH_23_alpha = med_v_alpha - (0.47 * alpha)
-  #   MTH_34_alpha = med_v_alpha - (0.64 * alpha)
-  #   MTH_45_alpha = med_v_alpha - (0.81 * alpha)
-  # }
-  #
-  #
-  # # Define cutting masks for MTH areas
-  # ## Find coord pairs for MTH and mid 2nd division lines
-  # crossing_point <- line_int(vec_1, vec_2)
-  # crossing_point <- st_intersection()
-  # MT_lines <- c("MTH_hx_alpha", "MTH_12_alpha", "MTH_22_alpha", "MTH_23_alpha",
-  #               "MTH_34_alpha", "MTH_45_alpha")
-  # MTH_hx_line <- c(NA, NA, NA, NA)
-  # MTH_12_line <- c(NA, NA, NA, NA)
-  # MTH_22_line <- c(NA, NA, NA, NA)
-  # MTH_23_line <- c(NA, NA, NA, NA)
-  # MTH_34_line <- c(NA, NA, NA, NA)
-  # MTH_45_line <- c(NA, NA, NA, NA)
-  #
-  # for (i in 1:6) {
-  #   MT_line_name = paste0(substr(MT_lines[i], 1, 7), "line")
-  #   if (get(MT_lines[i]) <= 90) {
-  #     x2 = cos(get(MT_lines[i]) * pi / 180) * 5 + crossing_point[1]
-  #     y2 = sin(get(MT_lines[i]) * pi / 180) * 5 + crossing_point[2]
-  #   } else if (get(MT_lines[i]) > 90) {
-  #     angle = get(MT_lines[i]) - 90
-  #     x2 = crossing_point[1] - sin(angle * pi / 180) * 5
-  #     y2 = cos(angle * pi / 180) * 5 + crossing_point[2]
-  #   }
-  #   assign(MT_line_name, c(crossing_point[1], crossing_point[2], x2, y2))
-  # }
-  #
-  # if (side == "RIGHT") {
-  #   MT_hx_lat <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] + 1,
-  #                                            MTH_hx_line[4], MTH_hx_line[1] +
-  #                                              1, MTH_hx_line[2])))
-  #   MT_hx_med <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] - 1,
-  #                                            MTH_hx_line[4], MTH_hx_line[1] -
-  #                                              1, MTH_hx_line[2])))
-  #   MT_12_lat <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] + 1,
-  #                                            MTH_12_line[4], MTH_12_line[1] +
-  #                                              1, MTH_12_line[2])))
-  #   MT_12_med <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] - 1,
-  #                                            MTH_12_line[4], MTH_12_line[1] -
-  #                                              1, MTH_12_line[2])))
-  #   MT_23_lat <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] + 1,
-  #                                            MTH_23_line[4], MTH_23_line[1] +
-  #                                              1, MTH_23_line[2])))
-  #   MT_23_med <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] - 1,
-  #                                            MTH_23_line[4], MTH_23_line[1] -
-  #                                              1, MTH_23_line[2])))
-  #   MT_34_lat <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] + 1,
-  #                                            MTH_34_line[4], MTH_34_line[1] +
-  #                                              1, MTH_34_line[2])))
-  #   MT_34_med <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] - 1,
-  #                                            MTH_34_line[4], MTH_34_line[1] -
-  #                                              1, MTH_34_line[2])))
-  #   MT_45_lat <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] + 1,
-  #                                            MTH_45_line[4], MTH_45_line[1] +
-  #                                              1, MTH_45_line[2])))
-  #   MT_45_med <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] - 1,
-  #                                            MTH_45_line[4], MTH_45_line[1] -
-  #                                              1, MTH_45_line[2])))
-  # } else if (side == "LEFT") {
-  #   MT_hx_lat <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] - 1,
-  #                                            MTH_hx_line[4], MTH_hx_line[1] -
-  #                                              1, MTH_hx_line[2])))
-  #   MT_hx_med <- readWKT(vector_to_polygon(c(MTH_hx_line, MTH_hx_line[3] + 1,
-  #                                            MTH_hx_line[4], MTH_hx_line[1] +
-  #                                              1, MTH_hx_line[2])))
-  #   MT_12_lat <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] - 1,
-  #                                            MTH_12_line[4], MTH_12_line[1] -
-  #                                              1, MTH_12_line[2])))
-  #   MT_12_med <- readWKT(vector_to_polygon(c(MTH_12_line, MTH_12_line[3] + 1,
-  #                                            MTH_12_line[4], MTH_12_line[1] +
-  #                                              1, MTH_12_line[2])))
-  #   MT_23_lat <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] - 1,
-  #                                            MTH_23_line[4], MTH_23_line[1] -
-  #                                              1, MTH_23_line[2])))
-  #   MT_23_med <- readWKT(vector_to_polygon(c(MTH_23_line, MTH_23_line[3] + 1,
-  #                                            MTH_23_line[4], MTH_23_line[1] +
-  #                                              1, MTH_23_line[2])))
-  #   MT_34_lat <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] - 1,
-  #                                            MTH_34_line[4], MTH_34_line[1] -
-  #                                              1, MTH_34_line[2])))
-  #   MT_34_med <- readWKT(vector_to_polygon(c(MTH_34_line, MTH_34_line[3] + 1,
-  #                                            MTH_34_line[4], MTH_34_line[1] +
-  #                                              1, MTH_34_line[2])))
-  #   MT_45_lat <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] - 1,
-  #                                            MTH_45_line[4], MTH_45_line[1] -
-  #                                              1, MTH_45_line[2])))
-  #   MT_45_med <- readWKT(vector_to_polygon(c(MTH_45_line, MTH_45_line[3] + 1,
-  #                                            MTH_45_line[4], MTH_45_line[1] +
-  #                                              1, MTH_45_line[2])))
-  # }
-
+  hal_mask <- st_difference(toe_mask, MT_hx_poly_lat)
+  l_toe_mask <- st_difference(toe_mask, MT_hx_poly_med)
+  MT1_mask <- st_difference(ff_mask, MT_12_poly_lat)
+  MT2_mask <- st_difference(ff_mask, MT_23_poly_lat)
+  MT2_mask <- st_difference(MT2_mask, MT_12_poly_med)
+  MT3_mask <- st_difference(ff_mask, MT_34_poly_lat)
+  MT3_mask <- st_difference(MT3_mask, MT_23_poly_med)
+  MT4_mask <- st_difference(ff_mask, MT_45_poly_lat)
+  MT4_mask <- st_difference(MT4_mask, MT_34_poly_med)
+  MT5_mask <- st_difference(ff_mask, MT_45_poly_med)
 
   # Make mask list
   mask_list <- list(heel_mask = hf_mask,
                     midfoot_mask = mf_mask,
                     forefoot_mask = ff_mask,
-                    toe_mask = toe_mask)#,
-                    #l_toe_mask = l_toes_mask_,
-                    #MTH_1_mask = MTH_1_mask_,
-                    #MTH_2_mask = MTH_2_mask_,
-                    #MTH_3_mask = MTH_3_mask_,
-                    #MTH_4_mask = MTH_4_mask_,
-                    #MTH_5_mask = MTH_5_mask_)
+                    hal_mask = hal_mask,
+                    l_toe_mask = l_toe_mask,
+                    MT1_mask = MT1_mask,
+                    MT2_mask = MT2_mask,
+                    MT3_mask = MT3_mask,
+                    MT4_mask = MT4_mask,
+                    MT5_mask = MT5_mask)
 
 
   # Plot Footprint and masks if required
@@ -2384,10 +2253,11 @@ toe_line <- function(pressure_data) {
 #' @description create edge liens for footprint data
 #' @param mat Matrix
 #' @param side
+#' @importFrom sf st_as_sfc st_combine st_coordinates st_convex_hull
 #' @noRd
 edge_lines <- function(pressure_data, side) {
   # global variables
-  x <- y <- me <- sc_df <- side <- NULL
+  x <- y <- me <- sc_df <- NULL
 
   # max pressure image
   max_fp <- footprint(pressure_data, "max")
@@ -2426,23 +2296,19 @@ edge_lines <- function(pressure_data, side) {
   lat_edge_sf <- lat_edge %>% st_as_sf(coords = c("x", "y"))
   lat_edge_chull <- st_convex_hull(st_combine(lat_edge_sf))
 
-  ## convex hull of medial edge
-  med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
-  med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
-
   ## longest med and lateral edge line
   me_dis <- as.matrix(dist(st_coordinates(med_edge_chull)))
   me_dis <- me_dis[row(me_dis) == (col(me_dis) - 1)]
   me_max <- order(me_dis)[length(me_dis)]
   med_side <- st_coordinates(med_edge_chull)[c(me_max, me_max + 1), c(1, 2)]
   med_side_line <- st_linestring(med_side)
-  med_side_line <- st_extend_line(med_side_line, 0.1)
+  med_side_line <- st_extend_line(med_side_line, 1)
   le_dis <- as.matrix(dist(st_coordinates(lat_edge_chull)))
   le_dis <- le_dis[row(le_dis) == (col(le_dis) - 1)]
-  le_max <- order(le_dis)[length(le_dis)]
+  le_max <- order(le_dis)[length(le_dis) - 1]
   lat_side <- st_coordinates(lat_edge_chull)[c(le_max, le_max + 1), c(1, 2)]
   lat_side_line <- st_linestring(lat_side)
-  lat_side_line <- st_extend_line(lat_side_line, 0.1)
+  lat_side_line <- st_extend_line(lat_side_line, 1)
 
   # check that no points fall outside of line
   if (side == "RIGHT") {
@@ -2465,4 +2331,13 @@ binned_pal <- function(palette) {
   function(x) {
     palette(length(x))
   }
+}
+
+
+
+rot_line <- function(line, ang) {
+  cntrd <- st_centroid(line)
+  new_line <- (line - cntrd) * matrix(c(cos(ang), sin(ang),
+                                        -sin(ang), cos(ang)), 2, 2) + cntrd
+  return(new_line)
 }
