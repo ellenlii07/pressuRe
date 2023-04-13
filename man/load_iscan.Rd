@@ -22,9 +22,6 @@ Array. A 3D array covering each timepoint of the measurement. z
 Imports and formats .asc files collected on i-scan system and
    exported from Tekscan software
 }
-\examples{
-pressure_data <- load_iscan()
-}
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
 }

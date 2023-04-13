@@ -26,8 +26,8 @@ Imports and formats .asc files collected on pedar system and
    exported from Novel software
 }
 \examples{
-pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
-pressure_data <- load_pedar("inst/extdata/3DI_S001_V1_DC_1.asc")
+pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
+pressure_data <- load_pedar(pedar_data)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

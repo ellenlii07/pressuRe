@@ -23,9 +23,11 @@ Determine Center of Pressure Excursion Index (CPEI) for
 footprint pressure data
 }
 \examples{
+\dontrun{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 cpei(pressure_data, foot_side = "auto", plot = TRUE)
+}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

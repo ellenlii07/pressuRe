@@ -49,6 +49,9 @@ and not representative of steady state walking so this removes them}
 Select steps, usually from insole data, and format for analysis
 }
 \examples{
-pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
+\dontrun{
+pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
+pressure_data <- load_pedar(pedar_data)
 pressure_data <- select_steps(pressure_data)
+}
 }

@@ -180,8 +180,8 @@ load_emed <- function(pressure_filepath) {
 #'   \item events. List
 #'  }
 #' @examples
-#' pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
-#' pressure_data <- load_pedar("inst/extdata/3DI_S001_V1_DC_1.asc")
+#' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
+#' pressure_data <- load_pedar(pedar_data)
 #' @importFrom stringr str_split str_trim
 #' @export
 
@@ -275,7 +275,8 @@ load_fscan <- function(pressure_filepath) {
 #' @return Array. A 3D array covering each timepoint of the measurement. z
 #'   dimension represents time
 #' @examples
-#' pressure_data <- load_iscan()
+# iscan_data <- system.file("extdata", "iscan_test.lst", package = "pressuRe")
+# pressure_data <- load_iscan(iscan_data)
 #' @importFrom stringr str_match_all
 #' @export
 
@@ -403,8 +404,11 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   \item events. List
 #'   }
 #' @examples
-#' pressure_data <- load_pedar("inst/extdata/pedar_example.asc")
+#' \dontrun{
+#' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
+#' pressure_data <- load_pedar(pedar_data)
 #' pressure_data <- select_steps(pressure_data)
+#' }
 #' @importFrom ggplot2 ggplot aes geom_line xlab ylab ggtitle
 #' @importFrom magrittr "%>%"
 #' @importFrom dplyr filter
@@ -912,7 +916,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))#,
                         #color = NA, lwd = 0)
   g <- g + binned_scale("fill", "foo",
-                        binned_pal(scales::manual_pal(break_colors)),
+                        binned_pal(manual_pal(break_colors)),
                         guide = "coloursteps", breaks = break_values,
                         limits = c(0, max(cor$value)), show.limits = FALSE,
                         name = "Pressure (kPa)")
@@ -1014,7 +1018,7 @@ pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
 #' @param preview Logical. Whether to play the animation
 #' @return Animation in gif format
 #' @examples
-#' /dontrun {
+#' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' animate_pressure(pressure_data, fps = 10, file_name = "testgif.gif")
@@ -1100,7 +1104,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' @importFrom sf st_union st_difference
 #' @export
 
-automask <- function(pressure_data, foot_side, mask_scheme, sens = 4,
+automask <- function(pressure_data, foot_side = "auto", mask_scheme, sens = 4,
                      plot = FALSE) {
   # global variables
   x <- y <- mask <- x_coord <- y_coord <- me <- heel_cut_dist <-
@@ -1169,6 +1173,20 @@ automask <- function(pressure_data, foot_side, mask_scheme, sens = 4,
   ff_mask <- st_difference(ff_mask, toe_poly_dist)
 
   # Define angles for dividing lines between metatarsals
+  ## get edge lines
+  edges <- edge_lines(pressure_data, side)
+
+  ## angle between lines
+
+  ## intersection point
+
+  ## rotation angles for 2-4 lines
+
+  ## polys for 2-4 cuts
+
+  ## make met masks
+
+
   ## Find longest vectors (these are the med and lat edges of the footprint)
   ### shorten
   #unq_y <- unique(sens_coords$y)
@@ -1386,9 +1404,11 @@ automask <- function(pressure_data, foot_side, mask_scheme, sens = 4,
 #' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
 #' @examples
+#' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- create_mask(pressure_data, 4)
+#' }
 #' @importFrom grDevices x11
 #' @importFrom ggmap gglocator
 #' @importFrom ggplot2 aes geom_path
@@ -1401,7 +1421,7 @@ create_mask <- function(pressure_data, n_verts = 4, image = "max",
   x <- y <- NULL
 
   # check session is interactive
-  if (interactive == FALSE)
+  if (interactive() == FALSE)
     stop("user needs to select mask vertices")
 
   # plot footprint
@@ -1443,12 +1463,14 @@ create_mask <- function(pressure_data, n_verts = 4, image = "max",
 #' of the measurement.
 #' @return List.
 #' @examples
+#' \dontrun{
 #' edit_mask(pressure_data)
+#' }
 #' @export
 
 edit_mask <- function(pressure_data) {
   # check session is interactive
-  if (interactive == FALSE)
+  if (interactive() == FALSE)
     stop("user needs to select mask vertices")
 
 }
@@ -1467,9 +1489,11 @@ edit_mask <- function(pressure_data) {
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
 #' @return Numeric. CPEI value
 #' @examples
+#' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' cpei(pressure_data, foot_side = "auto", plot = TRUE)
+#' }
 #' @importFrom sf st_convex_hull st_linestring st_distance st_coordinates
 #' @importFrom dplyr pull summarise
 #' @export
@@ -1678,16 +1702,17 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'  "force_ts"
 #' @return Data frame.
 #' @examples
-#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-#' pressure_data <- load_emed(emed_data)
-#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
-#' @importFrom sf st_intersects
+# emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+# pressure_data <- load_emed(emed_data)
+# masks <- automask(pressure_data)
+# mask_analysis(pressure_data, masks, TRUE, variable = "press_peak_sensor_ts")
+#' @importFrom sf st_intersects st_geometry st_area
 #' @export
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                           variable = "peak_sensor") {
   # set global variables
-  act_sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
+  sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
 
   # set up mask/sensor areas
   ## sensor area
@@ -1701,17 +1726,17 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   sens_mask_df <- matrix(rep(0, length.out = (length(sens_poly) * length(masks))),
                          nrow = length(sens_poly), ncol = length(masks))
   for (i in 1:length(masks)){
-    for (j in 1:length(act_sens_poly)) {
-      x <- st_intersects(masks[[i]], act_sens_poly[[j]])
+    for (j in 1:length(sens_poly)) {
+      x <- st_intersects(masks[[i]], sens_poly[[j]])
       if (identical(x[[1]], integer(0)) == FALSE) {
-        y <- st_intersection(masks[[i]], act_sens_poly[[j]])
+        y <- st_intersection(masks[[i]], sens_poly[[j]])
         sens_mask_df[j, i] <- st_area(y) / sensor_area
       }
     }
   }
 
   ## combine sensor locations with mask areas
-  sens_mask_df <- cbind(act_sens, sens_mask_df)
+  #sens_mask_df <- cbind(act_sens, sens_mask_df)
 
   # calculate output variables. If variable name ends "_ts" output is vector
   # (per mask) equal to length of measurement, otherwise a single value per mask
@@ -1720,7 +1745,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   if (variable == "press_peak_sensor") {
     peak_sens <- rep(NA, times = length(masks))
     for (i in 1:length(overlap_list)) {
-      peak_sens[i] <- max(max_df[act_sens[overlap_list[[i]],]])
+      peak_sens[i] <- max(max_df[sens_poly[overlap_list[[i]],]])
     }
   }
 
@@ -1954,7 +1979,6 @@ masks_2_df <- function(masks) {
 #' @examples
 #' coords <- sensor_coords(pressure_data)
 #' @noRd
-
 sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
   # pressure image
   if (pressure_image == "all_active" | pressure_image == "max") {
@@ -2190,6 +2214,7 @@ plot_pedar <- function(pressure_data, pressure_image = "max",
 #' shorter than break_values
 #' @param break_colors Vector. Vector with colors to be used. Should be one
 #' longer than break_values
+#' @return Data frame.
 #' @noRd
 generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
@@ -2219,11 +2244,17 @@ generate_colors <- function(df, col_type = "default", break_values,
   return (df)
 }
 
+#' @title extend st line
+#' @param line sf linestring
+#' @param distance Numeric.
+#' @param end String
+#' @importFrom sf st_sfc st_crs st_coordinates
+#' @noRd
 st_extend_line <- function(line, distance, end = "BOTH") {
   if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1)
     stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
 
-  M <- sf::st_coordinates(line)[,1:2]
+  M <- st_coordinates(line)[,1:2]
   keep <- !(end == c("TAIL", "HEAD"))
 
   ends <- c(1, nrow(M))[keep]
@@ -2240,14 +2271,22 @@ st_extend_line <- function(line, distance, end = "BOTH") {
   distances <- if (length(distance) == 1) rep(distance, 2) else rev(distance[1:2])
 
   M[ends,] <- M[ends,] + distances[keep] * c(cos(headings), sin(headings))
-  newline <- sf::st_linestring(M)
+  newline <- st_linestring(M)
 
   # If input is sfc_LINESTRING and not sfg_LINESTRING
-  if (is.list(line)) newline <- sf::st_sfc(newline, crs = sf::st_crs(line))
+  if (is.list(line)) newline <- st_sfc(newline, crs = st_crs(line))
 
   return(newline)
 }
 
+#' @title line to polygon
+#' @description Extrude line to form polygon
+#' @param mat Matrix. xy points describing line or polyline
+#' @param distance Numeric. Distance to extrude line
+#' @param direction String. "+X" "-X", "+y", or "-Y"
+#' @return Polygon. sf polygon object
+#' @importFrom sf st_polygon
+#' @noRd
 st_line2polygon <- function(mat, distance, direction) {
   # get ends
   if (mat[1, 1] >= mat[nrow(mat), 1]) {dir1 <- "RL"} else {dir1 <- "LR"}
@@ -2344,40 +2383,82 @@ toe_line <- function(pressure_data) {
 #' @title edge lines
 #' @description create edge liens for footprint data
 #' @param mat Matrix
+#' @param side
 #' @noRd
-edge_lines <- function(mat) {
+edge_lines <- function(pressure_data, side) {
   # global variables
   x <- y <- me <- sc_df <- side <- NULL
 
-  # determine medial line
-  ## medial edge coords
-  unq_y <- unique(sc_df$y)
-  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y)),
-                         y = unq_y)
-  for (i in 1:length(unq_y)) {
-    if (side == "LEFT") {
-      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
-        summarise(me = max(x)) %>% pull(me)
-    } else {
-      med_edge[i, 1] <- sc_df %>% filter(y == unq_y[i]) %>%
-        summarise(me = min(x)) %>% pull(me)
-    }
+  # max pressure image
+  max_fp <- footprint(pressure_data, "max")
+
+  # coordinates
+  sens_coords <- sensor_coords(pressure_data)
+
+  # Find longest vectors (these are the med and lat edges of the footprint)
+  ## unique y coordinates of sensors
+  unq_y <- unique(sens_coords$y)
+
+  ## how much to shorten by
+  shorten_n <- ceiling(ncol(max_fp) / 10)
+  unq_y_short <- unq_y[-match(tail(sort(unq_y), shorten_n), unq_y)]
+  unq_y_short <- unq_y_short[-match(head(sort(unq_y_short), 3), unq_y_short)]
+
+  ## make edges
+  med_edge <- data.frame(x = rep(NA, length.out = length(unq_y_short)),
+                         y = unq_y_short)
+  lat_edge <- med_edge
+  for (i in 1:length(unq_y_short)) {
+    med_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
+      summarise(me = max(x_coord)) %>% pull(me)
+    lat_edge[i, 1] <- sens_coords %>% filter(y_coord == unq_y_short[i]) %>%
+      summarise(me = min(x_coord)) %>% pull(me)
   }
+  if (side == "RIGHT") {
+    x <- med_edge
+    med_edge <- lat_edge
+    lat_edge <- x
+  }
+
+  ### convex hulls of edges
+  med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
+  med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
+  lat_edge_sf <- lat_edge %>% st_as_sf(coords = c("x", "y"))
+  lat_edge_chull <- st_convex_hull(st_combine(lat_edge_sf))
 
   ## convex hull of medial edge
   med_edge_sf <- med_edge %>% st_as_sf(coords = c("x", "y"))
   med_edge_chull <- st_convex_hull(st_combine(med_edge_sf))
 
-  ## longest med edge line
+  ## longest med and lateral edge line
   me_dis <- as.matrix(dist(st_coordinates(med_edge_chull)))
   me_dis <- me_dis[row(me_dis) == (col(me_dis) - 1)]
   me_max <- order(me_dis)[length(me_dis)]
   med_side <- st_coordinates(med_edge_chull)[c(me_max, me_max + 1), c(1, 2)]
   med_side_line <- st_linestring(med_side)
   med_side_line <- st_extend_line(med_side_line, 0.1)
+  le_dis <- as.matrix(dist(st_coordinates(lat_edge_chull)))
+  le_dis <- le_dis[row(le_dis) == (col(le_dis) - 1)]
+  le_max <- order(le_dis)[length(le_dis)]
+  lat_side <- st_coordinates(lat_edge_chull)[c(le_max, le_max + 1), c(1, 2)]
+  lat_side_line <- st_linestring(lat_side)
+  lat_side_line <- st_extend_line(lat_side_line, 0.1)
+
+  # check that no points fall outside of line
+  if (side == "RIGHT") {
+    med_poly <- st_line2polygon(med_side_line, 1, "-X")  + c(-0.001, 0)
+    lat_poly <- st_line2polygon(lat_side_line, 1, "+X")  + c(0.001, 0)
+  }
+  med_int <- st_intersects(st_as_sfc(med_edge_sf), med_poly)
+  lat_int <- st_intersects(st_as_sfc(lat_edge_sf), lat_poly)
+
+  # if points do fall in poly, use fitted line approach
+
+  # return lines
+  return(list(med_side_line, lat_side_line))
 }
 
-#' Color binning funciton
+#' Color binning function
 #' taken from ggplot2 codebase
 #' @noRd
 binned_pal <- function(palette) {

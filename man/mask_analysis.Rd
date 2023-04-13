@@ -33,11 +33,6 @@ Data frame.
 \description{
 Analyze masked regions of pressure data
 }
-\examples{
-emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-pressure_data <- load_emed(emed_data)
-mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
-}
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
 }

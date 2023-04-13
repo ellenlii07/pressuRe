@@ -17,7 +17,9 @@ List.
 Manually edit mask
 }
 \examples{
+\dontrun{
 edit_mask(pressure_data)
+}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
