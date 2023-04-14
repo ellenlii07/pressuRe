@@ -1570,10 +1570,10 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'  "force_ts"
 #' @return Data frame.
 #' @examples
-# emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-# pressure_data <- load_emed(emed_data)
-# masks <- automask(pressure_data)
-# mask_analysis(pressure_data, masks, TRUE, variable = "press_peak_sensor_ts")
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' masks <- automask(pressure_data)
+#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @export
 
@@ -1586,6 +1586,9 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   ## sensor area
   sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
+  # active sensors
+  act_sens <- which(footprint(pressure_data, "max") > 0)
+
   ## Make active sensors into polygons
   sens_coords <- sensor_coords(pressure_data, pressure_image = "all_active")
   sens_poly <- sensor_2_polygon(pressure_data)
@@ -1593,6 +1596,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   ## For each region mask, find which polygons intersect
   sens_mask_df <- matrix(rep(0, length.out = (length(sens_poly) * length(masks))),
                          nrow = length(sens_poly), ncol = length(masks))
+  sens_mask_df <- as.data.frame(sens_mask_df)
+  colnames(sens_mask_df) <- names(masks)
   for (i in 1:length(masks)){
     for (j in 1:length(sens_poly)) {
       x <- st_intersects(masks[[i]], sens_poly[[j]])
@@ -1686,14 +1691,14 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
                          nrow = dim(pressure_data[[1]])[3],
                          ncol = length(masks))
     for (mask in seq_along(masks)) {
-      mask_mat <- sens_mask_df[, (mask + 2)]
+      mask_mat <- sens_mask_df[, mask]
       for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- pressure_data[[1]][, , i] * sensor_area * 1000
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens] * sensor_area * 1000
         force <- rep(0, length.out = length(mask_mat))
-        for (j in 1:length(mask_mat)) (
-          force[j] <- P[sens_mask_df[j, 1], sens_mask_df[j, 2]] * mask_mat[j]
-        )
-        mask_force[i, mask] <- sum(force)
+        #for (j in 1:length(mask_mat)) (
+          mask_force[i, mask] <- sum(P * mask_mat)
+        #)
       }
     }
   }
