@@ -1093,18 +1093,17 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' @param foot_side String. "RIGHT", "LEFT", or "auto". Auto uses
 #' auto_detect_side function
 #' @param mask_scheme List.
-#' @param sens Numeric. Number of frames per second in animation
 #' @param plot Logical. Whether to play the animation
 #' @return List. Contains polygon with each mask
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
+#' masks <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' @importFrom zoo rollapply
 #' @importFrom sf st_union st_difference
 #' @export
 
-automask <- function(pressure_data, foot_side = "auto", mask_scheme, sens = 4,
+automask <- function(pressure_data, foot_side = "auto", mask_scheme,
                      plot = FALSE) {
   # global variables
   x <- y <- mask <- x_coord <- y_coord <- me <- heel_cut_dist <-
@@ -1190,30 +1189,30 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme, sens = 4,
   med_lat_int <- st_intersection(edges[[1]], edges[[2]])
 
   ## rotation angles for 2-4 lines
-  MT_hx_alpha <- med_line_angle + (0.33 * alpha)
-  MT_12_alpha <- med_line_angle + (0.3  * alpha)
-  MT_23_alpha <- med_line_angle + (0.47 * alpha)
-  MT_34_alpha <- med_line_angle + (0.64 * alpha)
-  MT_45_alpha <- med_line_angle + (0.81 * alpha)
+  MT_hx_alpha <- (0.33 * alpha)
+  MT_12_alpha <- (0.3  * alpha)
+  MT_23_alpha <- (0.47 * alpha)
+  MT_34_alpha <- (0.64 * alpha)
+  MT_45_alpha <- (0.81 * alpha)
 
   ## polys for met and hal cuts
   if (side == "RIGHT") {lat_dir <- "+X"; med_dir <- "-X"}
   if (side == "LEFT") {lat_dir <- "-X"; med_dir <- "+X"}
-  MT_hx_line <- rot_line(edges[[1]], MT_hx_alpha)
-  MT_hx_poly_lat <- st_line2polygon(st_coordinates(MT_hx_line), 1, lat_dir)
-  MT_hx_poly_med <- st_line2polygon(st_coordinates(MT_hx_line), 1, med_dir)
-  MT_12_line <- rot_line(edges[[1]], MT_12_alpha)
-  MT_12_poly_lat <- st_line2polygon(st_coordinates(MT_12_line), 1, lat_dir)
-  MT_12_poly_med <- st_line2polygon(st_coordinates(MT_12_line), 1, med_dir)
-  MT_23_line <- rot_line(edges[[1]], MT_23_alpha)
-  MT_23_poly_lat <- st_line2polygon(st_coordinates(MT_23_line), 1, lat_dir)
-  MT_23_poly_med <- st_line2polygon(st_coordinates(MT_23_line), 1, med_dir)
-  MT_34_line <- rot_line(edges[[1]], MT_34_alpha)
-  MT_34_poly_lat <- st_line2polygon(st_coordinates(MT_34_line), 1, lat_dir)
-  MT_34_poly_med <- st_line2polygon(st_coordinates(MT_34_line), 1, med_dir)
-  MT_45_line <- rot_line(edges[[1]], MT_45_alpha)
-  MT_45_poly_lat <- st_line2polygon(st_coordinates(MT_45_line), 1, lat_dir)
-  MT_45_poly_med <- st_line2polygon(st_coordinates(MT_45_line), 1, med_dir)
+  MT_hx_line <- rot_line(edges[[1]], MT_hx_alpha, med_lat_int)
+  MT_hx_poly_lat <- st_line2polygon(st_coordinates(MT_hx_line)[, 1:2], 1, lat_dir)
+  MT_hx_poly_med <- st_line2polygon(st_coordinates(MT_hx_line)[, 1:2], 1, med_dir)
+  MT_12_line <- rot_line(edges[[1]], MT_12_alpha, med_lat_int)
+  MT_12_poly_lat <- st_line2polygon(st_coordinates(MT_12_line)[, 1:2], 1, lat_dir)
+  MT_12_poly_med <- st_line2polygon(st_coordinates(MT_12_line)[, 1:2], 1, med_dir)
+  MT_23_line <- rot_line(edges[[1]], MT_23_alpha, med_lat_int)
+  MT_23_poly_lat <- st_line2polygon(st_coordinates(MT_23_line)[, 1:2], 1, lat_dir)
+  MT_23_poly_med <- st_line2polygon(st_coordinates(MT_23_line)[, 1:2], 1, med_dir)
+  MT_34_line <- rot_line(edges[[1]], MT_34_alpha, med_lat_int)
+  MT_34_poly_lat <- st_line2polygon(st_coordinates(MT_34_line)[, 1:2], 1, lat_dir)
+  MT_34_poly_med <- st_line2polygon(st_coordinates(MT_34_line)[, 1:2], 1, med_dir)
+  MT_45_line <- rot_line(edges[[1]], MT_45_alpha, med_lat_int)
+  MT_45_poly_lat <- st_line2polygon(st_coordinates(MT_45_line)[, 1:2], 1, lat_dir)
+  MT_45_poly_med <- st_line2polygon(st_coordinates(MT_45_line)[, 1:2], 1, med_dir)
 
   ## make met masks
   hal_mask <- st_difference(toe_mask, MT_hx_poly_lat)
@@ -2175,15 +2174,15 @@ st_line2polygon <- function(mat, distance, direction) {
   }
   # +X
   if (direction == "+X") {
-    mat_pts <- rbind(mat, c(mat[nrow(mat), 1], mat[nrow(mat), 2] + distance),
-                     c(mat[1, 1], mat[1, 2] + distance), mat[1, ])
+    mat_pts <- rbind(mat, c(mat[nrow(mat), 1] + distance, mat[nrow(mat), 2]),
+                     c(mat[1, 1] + distance, mat[1, 2]), mat[1, ])
     if (dir2 == "TB") {mat <- mat[nrow(mat):1, ]}
   }
 
   # -X
   if (direction == "-X") {
-    mat_pts <- rbind(mat, c(mat[nrow(mat), 1], mat[nrow(mat), 2] + distance),
-                     c(mat[1, 1], mat[1, 2] + distance), mat[1, ])
+    mat_pts <- rbind(mat, c(mat[nrow(mat), 1] - distance, mat[nrow(mat), 2]),
+                     c(mat[1, 1] - distance, mat[1, 2]), mat[1, ])
     if (dir2 == "BT") {mat <- mat[nrow(mat):1, ]}
   }
 
@@ -2254,10 +2253,11 @@ toe_line <- function(pressure_data) {
 #' @param mat Matrix
 #' @param side
 #' @importFrom sf st_as_sfc st_combine st_coordinates st_convex_hull
+#' @importFrom utils head tail
 #' @noRd
 edge_lines <- function(pressure_data, side) {
   # global variables
-  x <- y <- me <- sc_df <- NULL
+  x <- y <- x_coord <- y_coord <- me <- sc_df <- NULL
 
   # max pressure image
   max_fp <- footprint(pressure_data, "max")
@@ -2335,9 +2335,9 @@ binned_pal <- function(palette) {
 
 
 
-rot_line <- function(line, ang) {
-  cntrd <- st_centroid(line)
-  new_line <- (line - cntrd) * matrix(c(cos(ang), sin(ang),
-                                        -sin(ang), cos(ang)), 2, 2) + cntrd
+rot_line <- function(line, ang, cnt) {
+  ang_ <- ang * pi /180
+  new_line <- (line - cnt) * matrix(c(cos(ang_), sin(ang_),
+                                      -sin(ang_), cos(ang_)), 2, 2) + cnt
   return(new_line)
 }

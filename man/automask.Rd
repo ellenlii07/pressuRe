@@ -4,13 +4,7 @@
 \alias{automask}
 \title{automask footprint}
 \usage{
-automask(
-  pressure_data,
-  foot_side = "auto",
-  mask_scheme,
-  sens = 4,
-  plot = FALSE
-)
+automask(pressure_data, foot_side = "auto", mask_scheme, plot = FALSE)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
@@ -20,8 +14,6 @@ of the measurement. z dimension represents time}
 auto_detect_side function}
 
 \item{mask_scheme}{List.}
-
-\item{sens}{Numeric. Number of frames per second in animation}
 
 \item{plot}{Logical. Whether to play the animation}
 }
@@ -34,7 +26,7 @@ Automatically create mask of footprint data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-masks <- automask(pressure_data, foot_side = "auto", sens = 4, plot = TRUE)
+masks <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
