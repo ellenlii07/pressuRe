@@ -1608,25 +1608,27 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     }
   }
 
-  ## combine sensor locations with mask areas
-  #sens_mask_df <- cbind(act_sens, sens_mask_df)
-
   # calculate output variables. If variable name ends "_ts" output is vector
   # (per mask) equal to length of measurement, otherwise a single value per mask
 
+  ## storage matrices
+  if (str_ends(variable, "_ts")) {
+    output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
+                         nrow = dim(pressure_data[[1]])[3],
+                         ncol = length(masks))
+  } else {
+    output_mat <- matrix(rep(NA, times = length(masks)), nrow = 1)
+  }
+
   ## Analyse regions for maximum value of any sensor within region during trial.
   if (variable == "press_peak_sensor") {
-    peak_sens <- rep(NA, times = length(masks))
-    for (i in 1:length(overlap_list)) {
-      peak_sens[i] <- max(max_df[sens_poly[overlap_list[[i]],]])
+    for (mask in seq_along(mask)) {
+      output_mat[1, mask] <- max(max_df[sens_poly[overlap_list[[i]],]])
     }
   }
 
   # Analyse regions for maximum value of any sensor for each measurement frame.
   if (variable == "press_peak_sensor_ts") {
-    mask_pp <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
-                      nrow = dim(pressure_data[[1]])[3],
-                      ncol = length(masks))
     for (mask in seq_along(masks)) {
       mask_mat <- sens_mask_df[, (mask + 2)]
       for (i in 1:(dim(pressure_data[[1]])[3])) {
@@ -1644,8 +1646,10 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   # averaged over the mask)
   if (variable == "peak_mask") {
     peak_mask <- rep(NA, times = length(masks))
-    for (i in 1:length(overlap_list)) {
-      peak_sens[i] <- sum(max_df[act_sens[overlap_list[[i]],]]) / area
+    P <- c(footprint(pressure_data))
+    P <- P[act_sens]
+    for (mask in seq_along(masks)) {
+      peak_mask[mask] <- max(P[which(sens_mask_df[, mask] > 0)])
     }
   }
 
@@ -1687,7 +1691,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for force throughout the trial (outputs vector)
   if (variable == "force_ts") {
-    mask_force <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
+    output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
                          nrow = dim(pressure_data[[1]])[3],
                          ncol = length(masks))
     for (mask in seq_along(masks)) {
@@ -1696,15 +1700,13 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens] * sensor_area * 1000
         force <- rep(0, length.out = length(mask_mat))
-        #for (j in 1:length(mask_mat)) (
-          mask_force[i, mask] <- sum(P * mask_mat)
-        #)
+        output_mat[i, mask] <- sum(P * mask_mat)
       }
     }
   }
 
   # return
-  mask_force <- as.data.frame(mask_force)
+  mask_force <- as.data.frame(output_mat)
   colnames(mask_force) <- names(masks)
   return(mask_force)
 }
@@ -2277,7 +2279,8 @@ edge_lines <- function(pressure_data, side) {
   ## how much to shorten by
   shorten_n <- ceiling(ncol(max_fp) / 10)
   unq_y_short <- unq_y[-match(tail(sort(unq_y), shorten_n), unq_y)]
-  unq_y_short <- unq_y_short[-match(head(sort(unq_y_short), 3), unq_y_short)]
+  unq_y_short <- unq_y_short[-match(head(sort(unq_y_short), shorten_n),
+                                    unq_y_short)]
 
   ## make edges
   med_edge <- data.frame(x = rep(NA, length.out = length(unq_y_short)),
@@ -2320,8 +2323,8 @@ edge_lines <- function(pressure_data, side) {
     med_poly <- st_line2polygon(med_side_line, 1, "-X")  + c(-0.001, 0)
     lat_poly <- st_line2polygon(lat_side_line, 1, "+X")  + c(0.001, 0)
   }
-  med_int <- st_intersects(st_as_sfc(med_edge_sf), med_poly)
-  lat_int <- st_intersects(st_as_sfc(lat_edge_sf), lat_poly)
+  #med_int <- st_intersects(st_as_sfc(med_edge_sf), med_poly)
+  #lat_int <- st_intersects(st_as_sfc(lat_edge_sf), lat_poly)
 
   # if points do fall in poly, use fitted line approach
 
