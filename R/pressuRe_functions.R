@@ -13,7 +13,7 @@
 # cop for pedar
 # check/make pedar work for a lot of these functions
 # fix legend on animation
-# automask2: toe line, then for edges if standard doesn't work, fit line to edge point (truncated) then move till none outside line
+# automask2: toe line modifications
 
 # data list:
 ## Array. pressure data
@@ -1249,7 +1249,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
     g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.12))
     g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.28))
     g <- g + geom_path(data = mask_df, aes(x = x, y = y, group = mask),
-                       color = "red", size = 1)
+                       color = "red", linewidth = 1)
     print(g)
   }
 
@@ -1564,10 +1564,10 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'   lie wholly within mask are dealt with. If FALSE, they will be excluded;
 #'   if TRUE, for relevant variables their contribution will be weighted by the
 #'   proportion of the sensor that falls within the mask border
-#' @param variable String. Variable to be determined. "peak_sensor",
-#'  "peak_sensor_ts", "peak_mask", "peak_mask_ts", "mean_mask",
-#'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2", force_peak",
-#'  "force_ts"
+#' @param variable String. Variable to be determined. "press_peak_sensor",
+#'  "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
+#'  "mean_mask", "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
+#'  force_peak", "force_ts"
 #' @return Data frame.
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
@@ -1578,7 +1578,7 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @export
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
-                          variable = "peak_sensor") {
+                          variable = "press_peak_sensor") {
   # set global variables
   sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
 
@@ -1609,47 +1609,48 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   }
 
   # calculate output variables. If variable name ends "_ts" output is vector
-  # (per mask) equal to length of measurement, otherwise a single value per mask
-
+  # (per mask) equal to length of measurement, otherwise a single value per
+  # mask
   ## storage matrices
   if (str_ends(variable, "_ts")) {
-    output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
+    output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] *
+                               length(masks)),
                          nrow = dim(pressure_data[[1]])[3],
                          ncol = length(masks))
   } else {
     output_mat <- matrix(rep(NA, times = length(masks)), nrow = 1)
   }
 
-  ## Analyse regions for maximum value of any sensor within region during trial.
+  ## Analyse regions for maximum value of any sensor within region during trial
   if (variable == "press_peak_sensor") {
+    P <- c(footprint(pressure_data))
+    P <- P[act_sens]
     for (mask in seq_along(mask)) {
-      output_mat[1, mask] <- max(max_df[sens_poly[overlap_list[[i]],]])
+      output_mat[, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
     }
   }
 
-  # Analyse regions for maximum value of any sensor for each measurement frame.
+  # Analyse regions for maximum value of any sensor for each measurement frame
   if (variable == "press_peak_sensor_ts") {
     for (mask in seq_along(masks)) {
-      mask_mat <- sens_mask_df[, (mask + 2)]
       for (i in 1:(dim(pressure_data[[1]])[3])) {
         P <- max(pressure_data[[1]][, , i])
-        pp <- rep(0, length.out = length(mask_mat))
-        for (j in 1:length(mask_mat)) (
-          pp[j] <- max(P[sens_mask_df[j, 1], sens_mask_df[j, 2]])
-        )
-        mask_pp[i, mask] <- pp
+        P <- P[act_sens]
+        output_mat[i, mask] <- max(P[which(sens_mask_df[, mask]) > 0])
       }
     }
   }
 
   # Analyse regions for peak regional pressure (defined as the pressure
   # averaged over the mask)
-  if (variable == "peak_mask") {
-    peak_mask <- rep(NA, times = length(masks))
+  if (variable == "press_peak_mask") {
     P <- c(footprint(pressure_data))
-    P <- P[act_sens]
+    P <- P[act_sens] * sensor_area * 1000
+    CA <- rep(sensor_area, length.out = length(P))
     for (mask in seq_along(masks)) {
-      peak_mask[mask] <- max(P[which(sens_mask_df[, mask] > 0)])
+      force <- sum(P * sens_mask_df[, mask])
+      contact_area <- sum(CA * sens_mask_df[, mask])
+      output_mat[, mask] <- force / contact_area
     }
   }
 
@@ -1666,17 +1667,37 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for maximum contact area of region during trial
   if (variable == "contact_area_peak") {
-
+    P <- c(footprint(pressure_data))
+    P <- P[act_sens]
+    P[1:length(P)] <- sensor_area
+    for (mask in seq_along(masks)) {
+      output_mat[, mask] <- sum(P * sens_mask_df[, mask])
+    }
   }
 
   # Analyse regions for contact area throughout the trial (outputs vector)
   if (variable == "contact_area_ts") {
-
+    for (mask in seq_along(masks)) {
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens]
+        P[1:length(P)] <- sensor_area
+        output_mat[i, mask] <- sum(P * sens_mask_df[, mask])
+      }
+    }
   }
 
   # Analyse regions for pressure time integral (Novel definition)
   if (variable == "press_ti_1") {
-
+    for (mask in seq_along(masks)) {
+      mask_pp <- rep(NA, length.out = dim(pressure_data[[1]][3]))
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- max(pressure_data[[1]][, , i])
+        P <- P[act_sens]
+        mask_pp[i] <- max(P[which(sens_mask_df[, mask]) > 0])
+      }
+      output_mat[, mask] <- sum(mask_pp)
+    }
   }
 
   # Analyse regions for pressure time integral (Melai definition)
@@ -1686,29 +1707,28 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
 
   # Analyse regions for maximum force during the trial
   if (variable == "force_peak") {
-    peak_force <- rep(NA, times = length(masks))
+    P <- c(footprint(pressure_data))
+    P <- P[act_sens] * sensor_area * 1000
+    for (mask in seq_along(masks)) {
+      output_mat[, mask] <- sum(P * sens_mask_df[, mask])
+    }
   }
 
   # Analyse regions for force throughout the trial (outputs vector)
   if (variable == "force_ts") {
-    output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] * length(masks)),
-                         nrow = dim(pressure_data[[1]])[3],
-                         ncol = length(masks))
     for (mask in seq_along(masks)) {
-      mask_mat <- sens_mask_df[, mask]
       for (i in 1:(dim(pressure_data[[1]])[3])) {
         P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens] * sensor_area * 1000
-        force <- rep(0, length.out = length(mask_mat))
-        output_mat[i, mask] <- sum(P * mask_mat)
+        output_mat[i, mask] <- sum(P * sens_mask_df[, mask])
       }
     }
   }
 
   # return
-  mask_force <- as.data.frame(output_mat)
-  colnames(mask_force) <- names(masks)
-  return(mask_force)
+  output_df <- as.data.frame(output_mat)
+  colnames(output_df) <- names(masks)
+  return(output_df)
 }
 
 
@@ -2228,6 +2248,16 @@ toe_line <- function(pressure_data) {
     }
   }
 
+  # check points are less than 1/4 from front of foot
+  ff_dist <- round(ncol(fp_max) / 4)
+  for (fp_col in 1:length(good_cols)) {
+    if (!is.na(good_cols[fp_col])) {
+      if ((good_cols[fp_col] - (which(pf_max_top[, fp_col] > 0)[1])) > ff_dist) {
+        good_cols[fp_col] <- NA
+      }
+    }
+  }
+
   # coords
   toe_line_mat <- matrix(NA, length(good_cols), 2)
   dims <- pressure_data[[3]]
@@ -2258,7 +2288,7 @@ toe_line <- function(pressure_data) {
 #' @title edge lines
 #' @description create edge liens for footprint data
 #' @param mat Matrix
-#' @param side
+#' @param side String
 #' @importFrom sf st_as_sfc st_combine st_coordinates st_convex_hull
 #' @importFrom utils head tail
 #' @noRd
