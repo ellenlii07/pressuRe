@@ -19,7 +19,7 @@
 ## Array. pressure data
 ## String. data type (usually collection system, e.g. emed)
 ## Numeric. sens_size. sensor size
-## Numeric. Single number time between
+## Numeric. Single number time between samples
 ## List. Mask list
 ## events (for example, to define start/end of individual steps for insole data)
 
@@ -1566,15 +1566,16 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'   proportion of the sensor that falls within the mask border
 #' @param variable String. Variable to be determined. "press_peak_sensor",
 #'  "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
-#'  "mean_mask", "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
-#'  force_peak", "force_ts"
+#'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
+#'  "force_time_integral", "force_peak", "force_ts"
 #' @return Data frame.
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' masks <- automask(pressure_data)
-#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
+#' mask_analysis(pressure_data, masks, TRUE, variable = "press_peak_mask")
 #' @importFrom sf st_intersects st_geometry st_area
+#' @importFrom pracma trapz
 #' @export
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
@@ -1625,7 +1626,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   if (variable == "press_peak_sensor") {
     P <- c(footprint(pressure_data))
     P <- P[act_sens]
-    for (mask in seq_along(mask)) {
+    for (mask in seq_along(masks)) {
       output_mat[, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
     }
   }
@@ -1634,9 +1635,9 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   if (variable == "press_peak_sensor_ts") {
     for (mask in seq_along(masks)) {
       for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- max(pressure_data[[1]][, , i])
+        P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens]
-        output_mat[i, mask] <- max(P[which(sens_mask_df[, mask]) > 0])
+        output_mat[i, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
       }
     }
   }
@@ -1654,24 +1655,26 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     }
   }
 
-  # Analyse regions for peak regional pressure (defined as the maximum mean
-  # pressure of active sensors in region during the trial). Outputs 101 point vector
-  if (variable == "press_peak_region_ts") {
-
-  }
-
-  # Analyse regions for overall mean pressure during the trial
-  if (variable == "press_mean_region") {
-
+  # Analyse regions for peak mask pressure (defined as the maximum mean pressure
+  # of active sensors in region during the trial). Outputs 101 point vector
+  if (variable == "press_peak_mask_ts") {
+    for (mask in seq_along(masks)) {
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens] * sensor_area * 1000
+        CA <- rep(sensor_area, length.out = length(P))
+        force <- sum(P * sens_mask_df[, mask])
+        contact_area <- sum(CA * sens_mask_df[, mask])
+        output_mat[i, mask] <- force / contact_area
+      }
+    }
   }
 
   # Analyse regions for maximum contact area of region during trial
   if (variable == "contact_area_peak") {
-    P <- c(footprint(pressure_data))
-    P <- P[act_sens]
-    P[1:length(P)] <- sensor_area
+    CA <- rep(sensor_area, length.out = length(act_sens))
     for (mask in seq_along(masks)) {
-      output_mat[, mask] <- sum(P * sens_mask_df[, mask])
+      output_mat[, mask] <- sum(CA * sens_mask_df[, mask])
     }
   }
 
@@ -1681,7 +1684,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
       for (i in 1:(dim(pressure_data[[1]])[3])) {
         P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens]
-        P[1:length(P)] <- sensor_area
+        P[P > 0] <- sensor_area
         output_mat[i, mask] <- sum(P * sens_mask_df[, mask])
       }
     }
@@ -1696,13 +1699,41 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         P <- P[act_sens]
         mask_pp[i] <- max(P[which(sens_mask_df[, mask]) > 0])
       }
-      output_mat[, mask] <- sum(mask_pp)
+      output_mat[, mask] <- sum(mask_pp) * pressure_data[[4]] *
+        dim(pressure_data[[1]])[3]
     }
   }
 
   # Analyse regions for pressure time integral (Melai definition)
   if (variable == "press_ti_2") {
+    time_seq <- seq(0, by = pressure_data[[4]],
+                    length.out = dim(pressure_data[[1]])[3])
+    for (mask in seq_along(masks)) {
+      force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens] * sensor_area * 1000
+        force[i] <- sum(P * sens_mask_df[, mask])
+      }
+      CA <- rep(sensor_area, length.out = length(act_sens))
+      CA <- sum(CA * sens_mask_df[, mask])
+      output_mat[, mask] <- trapz(time_seq, force) / CA
+    }
+  }
 
+  # Analyse regions for force time integral
+  if (variable == "force_time_integral") {
+    time_seq <- seq(0, by = pressure_data[[4]],
+                    length.out = dim(pressure_data[[1]])[3])
+    for (mask in seq_along(masks)) {
+      force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens] * sensor_area * 1000
+        force[i] <- sum(P * sens_mask_df[, mask])
+      }
+      output_mat[, mask] <- trapz(time_seq, force)
+    }
   }
 
   # Analyse regions for maximum force during the trial
@@ -2249,7 +2280,7 @@ toe_line <- function(pressure_data) {
   }
 
   # check points are less than 1/4 from front of foot
-  ff_dist <- round(ncol(fp_max) / 4)
+  ff_dist <- round(ncol(pf_max) / 4)
   for (fp_col in 1:length(good_cols)) {
     if (!is.na(good_cols[fp_col])) {
       if ((good_cols[fp_col] - (which(pf_max_top[, fp_col] > 0)[1])) > ff_dist) {
