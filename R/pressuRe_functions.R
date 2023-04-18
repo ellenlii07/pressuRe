@@ -1568,18 +1568,21 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'  "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
 #'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
 #'  "force_time_integral", "force_peak", "force_ts"
+#' @param pressure_units String. Default "kPa"
+#' @param area_units String. Default is "cm2" (square centimeters)
 #' @return Data frame.
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' masks <- automask(pressure_data)
-#' mask_analysis(pressure_data, masks, TRUE, variable = "press_peak_mask")
+#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
 
 mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
-                          variable = "press_peak_sensor") {
+                          variable = "press_peak_sensor",
+                          pressure_units = "kPa", area_units = "cm2") {
   # set global variables
   sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
 
@@ -1651,12 +1654,12 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     for (mask in seq_along(masks)) {
       force <- sum(P * sens_mask_df[, mask])
       contact_area <- sum(CA * sens_mask_df[, mask])
-      output_mat[, mask] <- force / contact_area
+      output_mat[, mask] <- force / contact_area / 1000
     }
   }
 
   # Analyse regions for peak mask pressure (defined as the maximum mean pressure
-  # of active sensors in region during the trial). Outputs 101 point vector
+  # of active sensors in region during the trial). Outputs 101 point vector (kPa)
   if (variable == "press_peak_mask_ts") {
     for (mask in seq_along(masks)) {
       for (i in 1:(dim(pressure_data[[1]])[3])) {
@@ -1665,7 +1668,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         CA <- rep(sensor_area, length.out = length(P))
         force <- sum(P * sens_mask_df[, mask])
         contact_area <- sum(CA * sens_mask_df[, mask])
-        output_mat[i, mask] <- force / contact_area
+        output_mat[i, mask] <- force / contact_area / 1000
       }
     }
   }
@@ -1674,7 +1677,9 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   if (variable == "contact_area_peak") {
     CA <- rep(sensor_area, length.out = length(act_sens))
     for (mask in seq_along(masks)) {
-      output_mat[, mask] <- sum(CA * sens_mask_df[, mask])
+      cArea <- sum(CA * sens_mask_df[, mask])
+      if (area_units == "cm2") {cArea <- cArea * 10000}
+      output_mat[, mask] <- cArea
     }
   }
 
@@ -1685,27 +1690,29 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens]
         P[P > 0] <- sensor_area
-        output_mat[i, mask] <- sum(P * sens_mask_df[, mask])
+        cArea <- sum(P * sens_mask_df[, mask])
+        if (area_units == "cm2") {cArea <- cArea * 10000}
+        output_mat[i, mask] <- cArea
       }
     }
   }
 
   # Analyse regions for pressure time integral (Novel definition)
-  if (variable == "press_ti_1") {
+  if (variable == "pti_1") {
     for (mask in seq_along(masks)) {
-      mask_pp <- rep(NA, length.out = dim(pressure_data[[1]][3]))
+      mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
       for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- max(pressure_data[[1]][, , i])
+        P <- c(pressure_data[[1]][, , i])
         P <- P[act_sens]
-        mask_pp[i] <- max(P[which(sens_mask_df[, mask]) > 0])
+        mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
+          pressure_data[[4]] * 1000
       }
-      output_mat[, mask] <- sum(mask_pp) * pressure_data[[4]] *
-        dim(pressure_data[[1]])[3]
+      output_mat[, mask] <- sum(mask_pp) / 10000
     }
   }
 
   # Analyse regions for pressure time integral (Melai definition)
-  if (variable == "press_ti_2") {
+  if (variable == "pti_2") {
     time_seq <- seq(0, by = pressure_data[[4]],
                     length.out = dim(pressure_data[[1]])[3])
     for (mask in seq_along(masks)) {
@@ -1717,7 +1724,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
       }
       CA <- rep(sensor_area, length.out = length(act_sens))
       CA <- sum(CA * sens_mask_df[, mask])
-      output_mat[, mask] <- trapz(time_seq, force) / CA
+      output_mat[, mask] <- pracma::trapz(time_seq, force) / CA / 10000
     }
   }
 
@@ -1732,7 +1739,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         P <- P[act_sens] * sensor_area * 1000
         force[i] <- sum(P * sens_mask_df[, mask])
       }
-      output_mat[, mask] <- trapz(time_seq, force)
+      output_mat[, mask] <- pracma::trapz(time_seq, force)
     }
   }
 

@@ -8,7 +8,9 @@ mask_analysis(
   pressure_data,
   masks,
   partial_sensors = FALSE,
-  variable = "press_peak_sensor"
+  variable = "press_peak_sensor",
+  pressure_units = "kPa",
+  area_units = "cm2"
 )
 }
 \arguments{
@@ -24,8 +26,12 @@ proportion of the sensor that falls within the mask border}
 
 \item{variable}{String. Variable to be determined. "press_peak_sensor",
 "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
-"mean_mask", "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
-force_peak", "force_ts"}
+"contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
+"force_time_integral", "force_peak", "force_ts"}
+
+\item{pressure_units}{String. Default "kPa"}
+
+\item{area_units}{String. Default is "cm2" (square centimeters)}
 }
 \value{
 Data frame.
