@@ -1,7 +1,7 @@
 # to do
 # load_footscan function
 # CPEI manual edit to be built into function
-# more output variables need to be added to  mask analysis
+# unit options need to be added to  mask analysis
 # more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
 # area curve (and others) to work with insole data
@@ -14,6 +14,7 @@
 # check/make pedar work for a lot of these functions
 # fix legend on animation
 # automask2: toe line modifications
+# fscan processing needs to be checked (work with NA?)
 
 # data list:
 ## Array. pressure data
@@ -245,7 +246,7 @@ load_pedar <- function(pressure_filepath) {
 #'   \item events. List
 #'  }
 #'  @examples
-#' fscan_data <- system.file("extdata", "fscan_testR.lst", package = "pressuRe")
+#' fscan_data <- system.file("extdata", "fscan_testL.asf", package = "pressuRe")
 #' pressure_data <- load_fscan(fscan_data)
 #'  @importFrom
 #'  @export
@@ -259,6 +260,49 @@ load_fscan <- function(pressure_filepath) {
   ## extension is correct
   if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "asf")
     stop("incorrect file extension, expected .asf")
+
+  # Read unformatted emed data
+  pressure_raw <- readLines(pressure_filepath, warn = FALSE)
+
+  # get sensor size
+  sens_size <- c(NA, NA)
+  sens_width <- which(grepl("ROW_SPACING", pressure_raw))
+  sens_width_ <- str_extract_all(pressure_raw[sens_width], "\\d+\\.\\d+")
+  sens_size[1] <- as.numeric(unlist(sens_width_))
+  sens_height <- which(grepl("COL_SPACING", pressure_raw))
+  sens_height_ <- str_extract_all(pressure_raw[sens_height], "\\d+\\.\\d+")
+  sens_size[2] <- as.numeric(unlist(sens_height_))
+  if (str_detect(pressure_raw[sens_width], "mm") == TRUE) {
+    sens_size <- sens_size * 0.001
+  }
+
+  # get capture frequency
+  time_line <- which(grepl("SECONDS_PER_FRAME", pressure_raw))
+  time_ln <- str_split(pressure_raw[time_line], "FRAME ")[[1]][2]
+  time <- as.numeric(unlist(str_extract_all(time_ln, "\\d+\\.\\d+")))
+
+  # determine position breaks
+  breaks <- grep("Frame", pressure_raw)
+
+  # determine matrix dimensions
+  col_n <- length(strsplit(pressure_raw[breaks[1] + 1], ",")[[1]])
+  row_n <- breaks[2] - breaks[1] - 2
+
+  # empty array
+  pressure_array <- array(0, dim = c(row_n, col_n, length(breaks)))
+  for (i in 1:length(breaks)) {
+    # frame
+    y <- pressure_raw[(breaks[i] + 1):(breaks[i] + row_n)]
+    z <- read.table(textConnection(y), sep = ",")
+    z[z == "B"] <- NA
+    z <- as.data.frame(lapply(z, as.numeric))
+    pressure_array[, , i] <- as.matrix(z)
+  }
+
+  # return formatted emed data
+  return(list(pressure_array = pressure_array, pressure_system = "fscan",
+              sens_size = sens_size,
+              time = time, masks = NULL, events = NULL))
 }
 
 
@@ -853,7 +897,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
+#' plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
 #' plot_pressure(pressure_data, variable = "frame", frame = 20,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
 #'               break_colors = c("blue", "green", "yellow", "red", "pink"))
@@ -883,6 +927,12 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
     x_lim <- max(fp_sens$x)
     y_lim <- max(fp_sens$y)
 
+    # if fscan, remove NAs
+    if (pressure_data[[2]] == "fscan") {
+      pressure_data[[1]][is.na(pressure_data[[1]])] <- 0
+    }
+
+    # footprint
     fp <- footprint(pressure_data, variable = variable, frame)
 
     # get footprint vector
