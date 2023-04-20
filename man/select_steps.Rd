@@ -6,8 +6,8 @@
 \usage{
 select_steps(
   pressure_data,
-  threshold_R = 20,
-  threshold_L = 20,
+  threshold_R = 30,
+  threshold_L = 30,
   min_frames = 10,
   steps_Rn = 5,
   steps_Ln = 5,

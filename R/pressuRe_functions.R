@@ -1,4 +1,4 @@
-# to do
+# to do (current version)
 # load_footscan function
 # CPEI manual edit to be built into function
 # unit options need to be added to  mask analysis
@@ -9,11 +9,14 @@
 # add support for pliance
 # edit mask needs to be written
 # add more input tests to throw errors
-# global pressure_import function (leave for V2)
 # cop for pedar
 # check/make pedar work for a lot of these functions
 # automask2: toe line modifications
 # fscan processing needs to be checked (work with NA?)
+
+# to do (future)
+# global pressure_import function (leave for V2)
+# create masks for iscan during startup
 
 # data list:
 ## Array. pressure data
@@ -245,22 +248,24 @@ load_pedar <- function(pressure_filepath) {
 #'   \item events. List
 #'  }
 #'  @examples
-#' fscan_data <- system.file("extdata", "fscan_testL.asf", package = "pressuRe")
-#' pressure_data <- load_fscan(fscan_data)
+#' tekscan_data <- system.file("extdata", "fscan_testL.asf", package = "pressuRe")
+#' tekscan_data <- system.file("extdata", "iscan_test.csv", package = "pressuRe")
+#' pressure_data <- load_tekscan(tekscan_data)
 #'  @importFrom
 #'  @export
 
-load_fscan <- function(pressure_filepath) {
+load_tekscan <- function(pressure_filepath) {
   # check parameters
   ## file exists
   if (file.exists(pressure_filepath) == FALSE)
     stop("file does not exist")
 
   ## extension is correct
-  if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "asf")
-    stop("incorrect file extension, expected .asf")
+  file_ext <- str_split(basename(pressure_filepath), "\\.")[[1]][2]
+  if (file_ext != "asf" & file_ext != "csv")
+    stop("incorrect file extension, expected .asf or .csv")
 
-  # Read unformatted emed data
+  # Read unformatted data
   pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
   # get sensor size
@@ -273,6 +278,9 @@ load_fscan <- function(pressure_filepath) {
   sens_size[2] <- as.numeric(unlist(sens_height_))
   if (str_detect(pressure_raw[sens_width], "mm") == TRUE) {
     sens_size <- sens_size * 0.001
+  }
+  if (str_detect(pressure_raw[sens_width], "centimeters") == TRUE) {
+    sens_size <- sens_size * 0.01
   }
 
   # get capture frequency
@@ -293,70 +301,15 @@ load_fscan <- function(pressure_filepath) {
     # frame
     y <- pressure_raw[(breaks[i] + 1):(breaks[i] + row_n)]
     z <- read.table(textConnection(y), sep = ",")
-    z[z == "B"] <- 0
+    z[z == "B"] <- -1
     z <- as.data.frame(lapply(z, as.numeric))
     pressure_array[, , i] <- as.matrix(z)
   }
 
-  # return formatted emed data
+  # return formatted data
   return(list(pressure_array = pressure_array, pressure_system = "fscan",
               sens_size = sens_size,
               time = time, masks = NULL, events = NULL))
-}
-
-
-# =============================================================================
-
-#' @title Load tekscan i-scan data
-#' @description Imports and formats .asc files collected on i-scan system and
-#'    exported from Tekscan software
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_filepath String. Filepath pointing to emed pressure file
-#' @param sensor_type String. Currently only "6900" supported
-#' @param sensor_pad Integer. If sensor has multiple sensor pads choose the one
-#'   of interest
-#' @return Array. A 3D array covering each timepoint of the measurement. z
-#'   dimension represents time
-#' @examples
-#' iscan_data <- system.file("extdata", "iscan_test.lst", package = "pressuRe")
-#' pressure_data <- load_iscan(iscan_data)
-#' @importFrom stringr str_match_all
-#' @export
-
-load_iscan <- function(pressure_filepath, sensor_type, sensor_pad) {
-  # test inputs
-  if(is.character(pressure_filepath) == FALSE)
-    stop("filepath needs to be a character string")
-
-  # Read unformated emed data
-  pressure_raw <- readLines(pressure_filepath, warn = FALSE)
-
-  # Determine dimensions of active sensor array
-  ## determine position breaks, no of frames, y dimension, and frame type
-  breaks <- grep("Frame", pressure_raw)
-  z_dim <- pressure_raw[grep("END_FRAME", pressure_raw)] %>%
-    str_match_all("[0-9]+") %>% unlist %>% as.numeric
-  if (sensor_type == "6900") {
-    n_rows <- 11
-    n_cols <- 11
-    pad_pos <- data.frame(row_pos = c(3, 3, 16, 16), col_pos = c(3, 16, 3, 16))
-  }
-
-  # make empty array to hold data
-  pressure_array <- array(NA, dim = c(n_rows, n_cols, z_dim))
-
-  # Make a list of individual frames
-  for (i in seq_along(breaks)) {
-    y <- pressure_raw[(breaks[i] + pad_pos[sensor_pad, 1]):(breaks[i] + pad_pos[sensor_pad, 1] + n_rows - 1)]
-    tc_y <- textConnection(y)
-    y <- read.table(tc_y, sep = ",")
-    y <- y[, pad_pos[sensor_pad, 2]:(pad_pos[sensor_pad, 2] + n_cols - 1)]
-    pressure_array[, , i] <- as.matrix(y)
-    close(tc_y)
-  }
-
-  # return i-Scan data
-  return(pressure_array)
 }
 
 
@@ -722,6 +675,11 @@ whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
 
   # peak or mean pressure
   if (variable == "peak_pressure" | variable == "mean_pressure") {
+    if (pressure_data[[2]] == "pedar") {
+      if (side == "RIGHT") {
+        values <- apply(pressure_data[[1]][1,,], 3, function(x) which(x == max(x)))
+      }
+    }
     for (i in 1:dim(pressure_data[[1]])[3]) {
       if (variable == "peak_pressure") {
         values[i] <- max(pressure_data[[1]][, , i])
@@ -937,11 +895,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                                 output = "df")
     x_lim <- max(fp_sens$x)
     y_lim <- max(fp_sens$y)
-
-    # if fscan, remove NAs
-    if (pressure_data[[2]] == "fscan") {
-      pressure_data[[1]][is.na(pressure_data[[1]])] <- 0
-    }
 
     # footprint
     fp <- footprint(pressure_data, variable = variable, frame)
