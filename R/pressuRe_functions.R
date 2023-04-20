@@ -630,6 +630,10 @@ select_steps <- function (pressure_data, threshold_R = 30,
 #' @export
 
 auto_detect_side <- function(pressure_data) {
+  # throw error if pedar data
+  if (pressure_data[[2]] == "pedar")
+    stop("This function does not work for pedar data")
+
   # max pressure footprint
   sc_df <- sensor_2_polygon(pressure_data, output = "df")[, c(1, 2)]
   sc_df <- sc_df[!duplicated(sc_df), ]
