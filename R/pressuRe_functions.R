@@ -12,7 +12,6 @@
 # global pressure_import function (leave for V2)
 # cop for pedar
 # check/make pedar work for a lot of these functions
-# fix legend on animation
 # automask2: toe line modifications
 # fscan processing needs to be checked (work with NA?)
 
@@ -294,7 +293,7 @@ load_fscan <- function(pressure_filepath) {
     # frame
     y <- pressure_raw[(breaks[i] + 1):(breaks[i] + row_n)]
     z <- read.table(textConnection(y), sep = ",")
-    z[z == "B"] <- NA
+    z[z == "B"] <- 0
     z <- as.data.frame(lapply(z, as.numeric))
     pressure_array[, , i] <- as.matrix(z)
   }
@@ -319,8 +318,8 @@ load_fscan <- function(pressure_filepath) {
 #' @return Array. A 3D array covering each timepoint of the measurement. z
 #'   dimension represents time
 #' @examples
-# iscan_data <- system.file("extdata", "iscan_test.lst", package = "pressuRe")
-# pressure_data <- load_iscan(iscan_data)
+#' iscan_data <- system.file("extdata", "iscan_test.lst", package = "pressuRe")
+#' pressure_data <- load_iscan(iscan_data)
 #' @importFrom stringr str_match_all
 #' @export
 
@@ -408,7 +407,7 @@ pressure_interp <- function(pressure_data, interp_to) {
   }
 
   # timing
-  time_seq <- seq(0, by = pressure_data[[3]], length.out = dims[3])
+  time_seq <- seq(0, by = pressure_data[[4]], length.out = dims[3])
   time_seq_int <- approxP(time_seq, interp_to)
   time_sample_int <- time_seq_int[2] - time_seq_int[1]
 
@@ -459,8 +458,8 @@ pressure_interp <- function(pressure_data, interp_to) {
 #' @importFrom utils menu
 #' @export
 
-select_steps <- function (pressure_data, threshold_R = 20,
-                          threshold_L = 20, min_frames = 10,
+select_steps <- function (pressure_data, threshold_R = 30,
+                          threshold_L = 30, min_frames = 10,
                           steps_Rn = 5, steps_Ln = 5, skip = 2) {
   # set up global variables
   frame <- NULL
@@ -480,6 +479,12 @@ select_steps <- function (pressure_data, threshold_R = 20,
   # Adjust thresholds to avoid errors
   threshold_R <- threshold_R + 0.01
   threshold_L <- threshold_L + 0.01
+
+  # throw error if threshold is less than min of trial
+  min_R <- min(force_R)
+  min_L <- min(force_L)
+  if (min_R > threshold_R | min_L > threshold_L)
+    stop("threshold is less than minimum force recorded in trial")
 
   # Get events
   FS_events_R <- which(force_R[-length(force_R)] < threshold_R &
@@ -588,8 +593,10 @@ select_steps <- function (pressure_data, threshold_R = 20,
   }
 
   # make events df
-  event_df <- data.frame(side =  c(rep("RIGHT", length.out = length(include_stps_R)),
-                                   rep("LEFT", length.out = length(include_stps_L))),
+  len_R <- length(which(include_stps_R == 1))
+  len_L <- length(which(include_stps_L == 1))
+  event_df <- data.frame(side = c(rep("RIGHT", length.out = len_R),
+                                  rep("LEFT", length.out = len_L)),
                          FON = c(FS_events_R[which(include_stps_R == 1)],
                                  FS_events_L[which(include_stps_L == 1)]),
                          FOFF = c(FO_events_R[which(include_stps_R == 1)],
@@ -677,7 +684,7 @@ auto_detect_side <- function(pressure_data) {
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' whole_pressure_curve(pressure_data, variable = "peak_pressure", plot = TRUE)
+#' whole_pressure_curve(pressure_data, variable = "force", plot = TRUE)
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
@@ -961,14 +968,17 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
     break_values <- c(0, 40, 60, 100, 150, 220, 300)
   }
 
-  ## plot
+  # legend range
+  range_max <- max(footprint(pressure_data))
+
+  # plot
   g <- ggplot()
-  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))#,
-                        #color = NA, lwd = 0)
+  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))
   g <- g + binned_scale("fill", "foo",
                         binned_pal(manual_pal(break_colors)),
                         guide = "coloursteps", breaks = break_values,
-                        limits = c(0, max(cor$value)), show.limits = FALSE,
+                        #limits = c(0, max(cor$value)), show.limits = FALSE,
+                        limits = c(0, range_max), show.limits = FALSE,
                         name = "Pressure (kPa)")
   g <- g + scale_x_continuous(expand = c(0, 0), limits = c(0, x_lim))
   g <- g + scale_y_continuous(expand = c(0, 0), limits = c(0, y_lim))

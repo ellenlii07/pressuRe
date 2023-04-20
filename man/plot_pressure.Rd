@@ -60,7 +60,7 @@ Produce plot of pressure data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-plot_pressure(pressure_data, variable = "max", plot_COP = TRUE)
+plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
 plot_pressure(pressure_data, variable = "frame", frame = 20,
               plot_colors = "custom", break_values = c(100, 200, 300, 750),
               break_colors = c("blue", "green", "yellow", "red", "pink"))

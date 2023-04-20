@@ -21,7 +21,7 @@ A list with information about the pressure data.
   \item events. List
  }
  @examples
-fscan_data <- system.file("extdata", "fscan_testR.lst", package = "pressuRe")
+fscan_data <- system.file("extdata", "fscan_testL.asf", package = "pressuRe")
 pressure_data <- load_fscan(fscan_data)
  @importFrom
  @export
