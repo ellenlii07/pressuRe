@@ -700,7 +700,7 @@ whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
   if(pressure_data[[2]] == "pedar" & missing(side) == TRUE)
-    stop("insole data needs to have side")
+    stop("pedar data needs to have side defined")
 
   # create empty vector to store variable
   values <- rep(NA, times = dim(pressure_data[[1]])[3])
@@ -708,7 +708,7 @@ whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
   # force
   if (variable == "force") {
     if (pressure_data[[2]] == "pedar") {
-      force <- force_pedar(pressure_data, side)
+      values <- force_pedar(pressure_data, side)
     } else {
       sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
       force_array <- pressure_data[[1]] * sens_area * 1000
@@ -2092,7 +2092,7 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
 #' @title pedar force
 #' @description generates force curve from pedar data
 #' @param pressure_data List.
-#' @param foot_side String
+#' @param foot_side String. "RIGHT" or "LEFT"
 #' @return Vector
 #' @noRd
 force_pedar <- function(pressure_data, foot_side) {
@@ -2114,11 +2114,14 @@ force_pedar <- function(pressure_data, foot_side) {
   force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
 
   # calculate force
-  if (foot_side == "right") {
+  if (foot_side == "RIGHT") {
     force_array <- force_array[, , 1] * pedarSensorAreas}
-  if (foot_side == "left") {
+  if (foot_side == "LEFT") {
     force_array <- force_array[, , 2] * pedarSensorAreas}
   force <- rowSums(force_array)
+
+  # return
+  return(force)
 }
 
 #' @title plot pedar
