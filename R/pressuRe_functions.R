@@ -5,7 +5,6 @@
 # more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
 # area curve (and others) to work with insole data
-# can load-iscan be made more generic?
 # add support for pliance
 # edit mask needs to be written
 # add more input tests to throw errors
@@ -232,8 +231,8 @@ load_pedar <- function(pressure_filepath) {
 
 # =============================================================================
 
-#' @title Load F-scan data
-#' @description Imports and formats .asc files collected on f-scan system and
+#' @title Load Tekscan data
+#' @description Imports and formats files collected on tekscan systems and
 #'    exported from Tekscan software
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
@@ -297,6 +296,8 @@ load_tekscan <- function(pressure_filepath) {
 
   # empty array
   pressure_array <- array(0, dim = c(row_n, col_n, length(breaks)))
+
+  # fill array
   for (i in 1:length(breaks)) {
     # frame
     y <- pressure_raw[(breaks[i] + 1):(breaks[i] + row_n)]
@@ -307,7 +308,79 @@ load_tekscan <- function(pressure_filepath) {
   }
 
   # return formatted data
-  return(list(pressure_array = pressure_array, pressure_system = "fscan",
+  return(list(pressure_array = pressure_array, pressure_system = "tekscan",
+              sens_size = sens_size,
+              time = time, masks = NULL, events = NULL))
+}
+
+
+# =============================================================================
+
+#' @title Load footscan data
+#' @description Imports and formats files collected on footscan systems
+#' (formerly RSScan)
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_filepath String. Filepath pointing to emed pressure file
+#' @return A list with information about the pressure data.
+#' \itemize{
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item pressure_system. String defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
+#'  }
+#'  @examples
+#' footscan_data <- system.file("extdata", "footscan_test.xls", package = "pressuRe")
+#' pressure_data <- load_footscan(footscan_data)
+#'  @importFrom readxl read_excel
+#'  @export
+
+load_footscan <- function(pressure_filepath) {
+  # check parameters
+  ## file exists
+  if (file.exists(pressure_filepath) == FALSE)
+    stop("file does not exist")
+
+  ## extension is correct
+  if (str_split(basename(pressure_filepath), "\\.")[[1]][2] != "xls")
+    stop("incorrect file extension, expected .xls")
+
+  # Read unformatted data
+  pressure_raw <- readxl::read_excel(pressure_filepath,
+                                     .name_repair = "minimal")
+
+  # sensor size
+  sens_size <- c(0.00508, 0.00762)
+  sens_area <- sens_size[1] * sens_size[2]
+
+  # determine position breaks
+  c1 <- unname(unlist(as.vector(pressure_raw[, 1])))
+  breaks <- grep("Frame", c1)
+
+  # get capture frequency
+  time <- regmatches(c1[breaks[2]], gregexpr("(?<=\\().*?(?=\\))",
+                                             c1[breaks[2]], perl = T))[[1]]
+  time <- as.numeric(unlist(str_split(time, " "))[1]) * 0.001
+
+  # determine matrix dimensions
+  col_n <- ncol(pressure_raw)
+  row_n <- breaks[2] - breaks[1] - 2
+
+  # empty array
+  pressure_array <- array(0, dim = c(row_n, col_n, length(breaks)))
+
+  # frame
+  for (i in 1:length(breaks)) {
+    z <- pressure_raw[(breaks[i] + 1):(breaks[i] + row_n), ]
+    z <- as.matrix(as.data.frame(lapply(z, as.numeric)))
+    z <- z[nrow(z):1, ]
+    pressure_array[, , i] <- z / (sens_area * 1000)
+  }
+
+  # return formatted data
+  return(list(pressure_array = pressure_array, pressure_system = "footscan",
               sens_size = sens_size,
               time = time, masks = NULL, events = NULL))
 }
@@ -1999,6 +2072,10 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
       y3 <- sens_coords[sens, 2] - height
       x4 <- sens_coords[sens, 1] - width
       y4 <- sens_coords[sens, 2] - height
+      if (y1 < 0) {y1 <- 0}
+      if (y2 < 0) {y2 <- 0}
+      if (y3 < 0) {y3 <- 0}
+      if (y4 < 0) {y4 <- 0}
       sens_polygons[[sens]] <- st_polygon(list(matrix(c(x1, x2, x3, x4, x1,
                                                         y1, y2, y3, y4, y1),
                                                       5, 2)))
@@ -2036,6 +2113,8 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
       id_df <- rbind(id_df, mat_df)
     }
   }
+
+  # check for minus values
 
   # return
   if (output == "sf") {return(sens_polygons)}
