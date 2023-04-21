@@ -1,5 +1,4 @@
 # to do (current version)
-# load_footscan function
 # CPEI manual edit to be built into function
 # unit options need to be added to  mask analysis
 # more automasking schemes (pedar especially)

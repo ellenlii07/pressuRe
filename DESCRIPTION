@@ -19,6 +19,7 @@ Imports:
     magick,
     magrittr,
     pracma,
+    readxl,
     scales,
     sf,
     stringr,
