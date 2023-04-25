@@ -29,9 +29,11 @@ proportion of the sensor that falls within the mask border}
 "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
 "force_time_integral", "force_peak", "force_ts"}
 
-\item{pressure_units}{String. Default "kPa"}
+\item{pressure_units}{String. Default "kPa". Other options: "MPa", "Ncm2"
+(Newtons per square centimeter)}
 
-\item{area_units}{String. Default is "cm2" (square centimeters)}
+\item{area_units}{String. Default is "cm2" (square centimeters). Other
+options "m2" (square meters); "mm2" (square millimeters)}
 }
 \value{
 Data frame.

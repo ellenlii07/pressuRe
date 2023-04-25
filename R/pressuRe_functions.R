@@ -1,9 +1,7 @@
 # to do (current version)
 # CPEI manual edit to be built into function
-# unit options need to be added to  mask analysis
 # more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
-# area curve (and others) to work with insole data
 # add support for pliance
 # edit mask needs to be written
 # add more input tests to throw errors
@@ -706,8 +704,10 @@ auto_detect_side <- function(pressure_data) {
 #' pressure and area for complete measurement. Useful for checking data
 #' @param pressure_data List. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param variable String. "peak_pressure", "mean_pressure", "force", or "area"
+#' @param variable String. "peak_pressure", "force", or "area"
 #' @param side For insole data only
+#' @param threshold Numeric. Threshold value for sensor to be considered active.
+#' Currently only applies to insole data
 #' @param plot Logical. If TRUE also plots data as line curve
 #' @return Numeric vector containing variable values
 #' @examples
@@ -717,7 +717,8 @@ auto_detect_side <- function(pressure_data) {
 #' @importFrom ggplot2 aes ggplot geom_line theme_bw xlab ylab
 #' @export
 
-whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
+whole_pressure_curve <- function(pressure_data, variable, side, threshold = 10,
+                                 plot = FALSE) {
   # set global variables
   time <- value <- NULL
 
@@ -733,7 +734,12 @@ whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
   # force
   if (variable == "force") {
     if (pressure_data[[2]] == "pedar") {
-      values <- force_pedar(pressure_data, side)
+        if (side == "RIGHT") {
+          values <- force_pedar(pressure_data, variable = "force")[, 1]
+        }
+        if (side == "LEFT") {
+          values <- force_pedar(pressure_data, variable = "force")[, 2]
+        }
     } else {
       sens_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
       force_array <- pressure_data[[1]] * sens_area * 1000
@@ -745,33 +751,41 @@ whole_pressure_curve <- function(pressure_data, variable, side, plot = FALSE) {
     }
   }
 
-  # peak or mean pressure
-  if (variable == "peak_pressure" | variable == "mean_pressure") {
+  # peak pressure
+  if (variable == "peak_pressure") {
     if (pressure_data[[2]] == "pedar") {
       if (side == "RIGHT") {
-        values <- apply(pressure_data[[1]][1,,], 3, function(x) which(x == max(x)))
+        mat_r <- pressure_data[[1]][1, ,]
+        values <- apply(mat_r, 2, max, na.rm = TRUE)
       }
-    }
-    for (i in 1:dim(pressure_data[[1]])[3]) {
-      if (variable == "peak_pressure") {
+      if (side == "LEFT") {
+        mat_r <- pressure_data[[1]][2, ,]
+        values <- apply(mat_r, 2, max, na.rm = TRUE)
+      }
+    } else {
+      for (i in 1:dim(pressure_data[[1]])[3]) {
         values[i] <- max(pressure_data[[1]][, , i])
-      }
-      if (variable == "mean_pressure") {
-        active_sens <- which(pressure_data[[1]][, , i] > 0, arr.ind = TRUE)
-        values[i] <- mean(pressure_data[[1]][active_sens[, 1],
-                                             active_sens[, 2], i])
       }
     }
   }
 
   # area
   if (variable == "area") {
-    # sensor size
-    sen_size <- pressure_data[[3]][1] * pressure_data[[3]][2]
+    if (pressure_data[[2]] == "pedar") {
+      if (side == "RIGHT") {
+        values <- force_pedar(pressure_data, variable = "area", threshold)[, 1]
+      }
+      if (side == "LEFT") {
+        values <- force_pedar(pressure_data, variable = "area", threshold)[, 2]
+      }
+    } else {
+      # sensor size
+      sen_size <- pressure_data[[3]][1] * pressure_data[[3]][2]
 
-    # find active area for each frame and store in vector
-    for (i in 1:dim(pressure_data[[1]])[3]) {
-      values[i] <- (sum(pressure_data[[1]][, , i] > 0)) * sen_size
+      # find active area for each frame and store in vector
+      for (i in 1:dim(pressure_data[[1]])[3]) {
+        values[i] <- (sum(pressure_data[[1]][, , i] > 0)) * sen_size
+      }
     }
   }
 
@@ -1657,8 +1671,10 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #'  "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
 #'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
 #'  "force_time_integral", "force_peak", "force_ts"
-#' @param pressure_units String. Default "kPa"
-#' @param area_units String. Default is "cm2" (square centimeters)
+#' @param pressure_units String. Default "kPa". Other options: "MPa", "Ncm2"
+#' (Newtons per square centimeter)
+#' @param area_units String. Default is "cm2" (square centimeters). Other
+#' options "m2" (square meters); "mm2" (square millimeters)
 #' @return Data frame.
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
@@ -1702,8 +1718,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
   }
 
   # calculate output variables. If variable name ends "_ts" output is vector
-  # (per mask) equal to length of measurement, otherwise a single value per
-  # mask
+  # (per mask) equal to length of measurement, otherwise output is a single
+  # value per mask
   ## storage matrices
   if (str_ends(variable, "_ts")) {
     output_mat <- matrix(rep(0, length.out = dim(pressure_data[[1]])[3] *
@@ -1721,6 +1737,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     for (mask in seq_along(masks)) {
       output_mat[, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
     }
+    if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
+    if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for maximum value of any sensor for each measurement frame
@@ -1732,6 +1750,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         output_mat[i, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
       }
     }
+    if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
+    if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for peak regional pressure (defined as the pressure
@@ -1745,6 +1765,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
       contact_area <- sum(CA * sens_mask_df[, mask])
       output_mat[, mask] <- force / contact_area / 1000
     }
+    if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
+    if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for peak mask pressure (defined as the maximum mean pressure
@@ -1760,6 +1782,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         output_mat[i, mask] <- force / contact_area / 1000
       }
     }
+    if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
+    if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for maximum contact area of region during trial
@@ -1768,6 +1792,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
     for (mask in seq_along(masks)) {
       cArea <- sum(CA * sens_mask_df[, mask])
       if (area_units == "cm2") {cArea <- cArea * 10000}
+      if (area_units == "mm2") {cArea <- cArea * 1000000}
       output_mat[, mask] <- cArea
     }
   }
@@ -1781,6 +1806,7 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         P[P > 0] <- sensor_area
         cArea <- sum(P * sens_mask_df[, mask])
         if (area_units == "cm2") {cArea <- cArea * 10000}
+        if (area_units == "mm2") {cArea <- cArea * 1000000}
         output_mat[i, mask] <- cArea
       }
     }
@@ -1796,8 +1822,10 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
         mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
           pressure_data[[4]] * 1000
       }
-      output_mat[, mask] <- sum(mask_pp) / 10000
+      output_mat[, mask] <- sum(mask_pp)
     }
+    if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
+    if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
   }
 
   # Analyse regions for pressure time integral (Melai definition)
@@ -1815,6 +1843,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
       CA <- sum(CA * sens_mask_df[, mask])
       output_mat[, mask] <- pracma::trapz(time_seq, force) / CA / 10000
     }
+    if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
+    if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
   }
 
   # Analyse regions for force time integral
@@ -1830,6 +1860,8 @@ mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
       }
       output_mat[, mask] <- pracma::trapz(time_seq, force)
     }
+    if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
+    if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
   }
 
   # Analyse regions for maximum force during the trial
@@ -2123,10 +2155,12 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
 #' @title pedar force
 #' @description generates force curve from pedar data
 #' @param pressure_data List.
-#' @param foot_side String. "RIGHT" or "LEFT"
+#' @param variable "force", "area"
+#' @threshold Numeric. For area calculations, minimum threshold for sensor to
+#' be active
 #' @return Vector
 #' @noRd
-force_pedar <- function(pressure_data, foot_side) {
+force_pedar <- function(pressure_data, variable = "force", threshold) {
   # set global variables
   pedar_insole_areas <- NULL
 
@@ -2139,20 +2173,30 @@ force_pedar <- function(pressure_data, foot_side) {
 
   # get pedar sensor areas
   load("data/pedar_insole_areas.rda")
-  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] * 0.001)
+  pedarSensorAreas <- as.vector(pedar_insole_areas[[pedar_insole_type]] *
+                                  0.001)
 
   # change array direction
   force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
 
   # calculate force
-  if (foot_side == "RIGHT") {
-    force_array <- force_array[, , 1] * pedarSensorAreas}
-  if (foot_side == "LEFT") {
-    force_array <- force_array[, , 2] * pedarSensorAreas}
-  force <- rowSums(force_array)
+  if (variable == "force") {
+    force_right <- rowSums(force_array[, , 1] * pedarSensorAreas)
+    force_left <- rowSums(force_array[, , 2] * pedarSensorAreas)
+    output_df <- cbind(force_right, force_left)
+  }
+
+  # calculate area
+  if (variable == "area") {
+    area_right <- force_array[, , 1] > threshold
+    area_right <- rowSums(area_right * pedarSensorAreas)
+    area_left <- force_array[, , 2] > threshold
+    area_left <- rowSums(area_left * pedarSensorAreas)
+    output_df <- cbind(area_right, area_left)
+  }
 
   # return
-  return(force)
+  return(output_df)
 }
 
 #' @title plot pedar
@@ -2364,6 +2408,15 @@ toe_line <- function(pressure_data) {
   # get max footprint and take top half
   pf_max <- footprint(pressure_data)
   pf_max_top <- pf_max[1:(round(nrow(pf_max)) / 2), ]
+
+  # remove small islands (toes)
+  ## make polygons
+  sensor_2_polygon(pf_max_top)
+
+  geometries <- st_cast(st_union(st_buffer(shape, 0.1)), "POLYGON") #Buffer to make the corners touch, union to dissolve adjacent borders
+  dissolved <- st_sf(geometries) #Create a sf object from the geometries
+  dissolved$clusterID=1:length(geometries) #Add cluster id to each row
+  result <- st_join(shape, dissolved) #Join cluster id to the original polygons
 
   # find cols with minima between two maxima
   good_cols <- rep(NA, length.out = ncol(pf_max))

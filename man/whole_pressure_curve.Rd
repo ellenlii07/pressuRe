@@ -4,15 +4,24 @@
 \alias{whole_pressure_curve}
 \title{Whole pressure curve}
 \usage{
-whole_pressure_curve(pressure_data, variable, side, plot = FALSE)
+whole_pressure_curve(
+  pressure_data,
+  variable,
+  side,
+  threshold = 10,
+  plot = FALSE
+)
 }
 \arguments{
 \item{pressure_data}{List. A 3D array covering each timepoint of the
 measurement. z dimension represents time}
 
-\item{variable}{String. "peak_pressure", "mean_pressure", "force", or "area"}
+\item{variable}{String. "peak_pressure", "force", or "area"}
 
 \item{side}{For insole data only}
+
+\item{threshold}{Numeric. Threshold value for sensor to be considered active.
+Currently only applies to insole data}
 
 \item{plot}{Logical. If TRUE also plots data as line curve}
 }
