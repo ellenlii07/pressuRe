@@ -2156,11 +2156,13 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
 #' @description generates force curve from pedar data
 #' @param pressure_data List.
 #' @param variable "force", "area"
-#' @threshold Numeric. For area calculations, minimum threshold for sensor to
+#' @param threshold Numeric. Threshold value for sensor to be considered active.
+#' Currently only applies to insole data
+#' @param threshold Numeric. For area calculations, minimum threshold for sensor to
 #' be active
 #' @return Vector
 #' @noRd
-force_pedar <- function(pressure_data, variable = "force", threshold) {
+force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
   # set global variables
   pedar_insole_areas <- NULL
 
@@ -2403,36 +2405,65 @@ st_line2polygon <- function(mat, distance, direction) {
 #' timepoint of the measurement. z dimension represents time
 #' @importFrom zoo as.zoo rollapply
 #' @importFrom stats na.omit
+#' @importFrom sf st_cast st_join st_sf
 #' @noRd
 toe_line <- function(pressure_data) {
+  # global variables
+  clusterID <- NULL
+
   # get max footprint and take top half
   pf_max <- footprint(pressure_data)
   pf_max_top <- pf_max[1:(round(nrow(pf_max)) / 2), ]
+  pressure_data2 <- pressure_data
+  pressure_data2[[1]] <- pf_max_top
+  act_sens_vec <- which(pf_max_top > 0)
 
   # remove small islands (toes)
-  ## make polygons
-  sensor_2_polygon(pf_max_top)
+  ## make polygon df
+  polygons <- sensor_2_polygon(pressure_data2, output = "sf")
+  pg_df <- data.frame(sens_id = 1:length(polygons))
+  pg_df$geometry <- st_sfc(polygons)
+  pg_df <- st_as_sf(pg_df)
 
-  geometries <- st_cast(st_union(st_buffer(shape, 0.1)), "POLYGON") #Buffer to make the corners touch, union to dissolve adjacent borders
-  dissolved <- st_sf(geometries) #Create a sf object from the geometries
-  dissolved$clusterID=1:length(geometries) #Add cluster id to each row
-  result <- st_join(shape, dissolved) #Join cluster id to the original polygons
+  ## find islands
+  geometries <- st_cast(st_union(st_buffer(pg_df, 0.0001)), "POLYGON")
+  dissolved <- st_sf(geometries)
+  dissolved$clusterID = 1:length(geometries)
+  pg_df <- st_join(pg_df, dissolved)
 
-  # find cols with minima between two maxima
+  ## remove small islands
+  pg_df <- pg_df %>% filter(clusterID == which.max(table(pg_df$clusterID)))
+  sens_keep <- pg_df$sens_id
+  sens_keep <- act_sens_vec[sens_keep]
+  pf_max_top_vec <- c(pf_max_top)
+  zeros <- c(1:length(pf_max_top_vec))
+  zeros <- zeros[!zeros %in% sens_keep]
+  pf_max_top_vec[zeros] <- 0
+  pf_max_top2 <- matrix(pf_max_top_vec, nrow = nrow(pf_max_top), ncol = ncol(pf_max_top))
+
+  # which cols had toes removed
   good_cols <- rep(NA, length.out = ncol(pf_max))
-  for (i in 1:ncol(pf_max_top)) {
-    mins <- which(rollapply(as.zoo(pf_max_top[, i]), 3,
+  for (i in 1:ncol(pf_max)) {
+    og <- which.max(pf_max_top[, i] > 0)
+    og_rm <- which.max(pf_max_top2[, i] > 0)
+    if (og != og_rm) {good_cols[i] <- og_rm - 2}
+  }
+
+  # which of the remaining cols have minima between two maxima
+  remaining_cols <- which(is.na(good_cols))
+  for (i in seq_along(remaining_cols)) {
+    mins <- which(rollapply(as.zoo(pf_max_top[, remaining_cols[i]]), 3,
                             function(x) which.min(x) == 2) == TRUE)
-    mins_rev <- which(rollapply(as.zoo(rev(pf_max_top[, i])), 3,
+    mins_rev <- which(rollapply(as.zoo(rev(pf_max_top[, remaining_cols[i]])), 3,
                                 function(x) which.min(x) == 2) == TRUE)
-    maxs <- which(rollapply(as.zoo(pf_max_top[, i]), 3,
+    maxs <- which(rollapply(as.zoo(pf_max_top[, remaining_cols[i]]), 3,
                             function(x) which.max(x) == 2) == TRUE)
     if (length(maxs) >= 2) {
       if (mins[1] > maxs[1] & mins[1] < maxs[2]) {
-        reps <- rle(pf_max_top[(mins[1] + 1):ncol(pf_max_top), i])$lengths[1]
+        reps <- rle(pf_max_top[(mins[1] + 1):ncol(pf_max_top), remaining_cols[i]])$lengths[1]
         if (reps > 1) {
           good_cols[i] <- mins[1] + (reps / 2)
-        } else {good_cols[i] <- mins[1]}
+        } else {good_cols[remaining_cols[i]] <- mins[1]}
       }
     }
   }
