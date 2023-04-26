@@ -2449,6 +2449,9 @@ toe_line <- function(pressure_data) {
     if (og != og_rm) {good_cols[i] <- og_rm - 2}
   }
 
+  # remove negative values
+  good_cols[good_cols < 1] <- NA
+
   # which of the remaining cols have minima between two maxima
   remaining_cols <- which(is.na(good_cols))
   for (i in seq_along(remaining_cols)) {
@@ -2468,13 +2471,19 @@ toe_line <- function(pressure_data) {
     }
   }
 
-  # check points are less than 1/4 from front of foot
-  ff_dist <- round(ncol(pf_max) / 4)
-  for (fp_col in 1:length(good_cols)) {
-    if (!is.na(good_cols[fp_col])) {
-      if ((good_cols[fp_col] - (which(pf_max_top[, fp_col] > 0)[1])) > ff_dist) {
-        good_cols[fp_col] <- NA
-      }
+  # check points are less than 1/3 from front of foot but > 15%
+  ff_dist <- round(nrow(pf_max) / 6)
+  ff_prox <- round(nrow(pf_max) / 12)
+  remaining_cols2 <- which(!is.na(good_cols))
+  for (fp_col in seq_along(remaining_cols2)) {
+    if ((good_cols[remaining_cols2[fp_col]] - (which(pf_max_top[, remaining_cols2[fp_col]] > 0)[1])) >= ff_dist) {
+      good_cols[remaining_cols2[fp_col]] <- NA
+    }
+  }
+  remaining_cols3 <- which(!is.na(good_cols))
+  for (fp_col in seq_along(remaining_cols3)) {
+    if ((good_cols[remaining_cols3[fp_col]] - (which(pf_max_top[, remaining_cols3[fp_col]] > 0)[1])) < ff_prox) {
+      good_cols[remaining_cols3[fp_col]] <- NA
     }
   }
 
