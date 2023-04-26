@@ -1498,7 +1498,7 @@ edit_mask <- function(pressure_data, n_edit) {
 
   # select point near edit vertex and select new value
   for (edit in seq(1, n_edit)) {
-    message("Select mask vertex to edit")
+    message("Select mask vertex to edit, then it's new location")
     mask <- gglocator(2)
     mask_vertices_edit <- mask_vertices
     mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
