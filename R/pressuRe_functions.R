@@ -2532,7 +2532,7 @@ toe_line <- function(pressure_data) {
 
   ## remove small islands
   pg_df <- pg_df %>% filter(clusterID == which.max(table(pg_df$clusterID)))
-  sens_keep <- pg_df$sens_id
+  sens_keep <- pg_df[["sens_id"]]
   sens_keep <- act_sens_vec[sens_keep]
   pf_max_top_vec <- c(pf_max_top)
   zeros <- c(1:length(pf_max_top_vec))
