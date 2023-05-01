@@ -1371,6 +1371,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @param image String. "max" = footprint of maximum sensors. "mean"
 #'   average value of sensors over time (usually for static analyses)
 #' @param n_verts Numeric. Number of vertices in mask
+#' @param n_masks Numeric. Number of masks to add
 #' @param preview Logical. Show new maks on pressure image
 #' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
 #'   selected region. z dimension represents time
@@ -1386,7 +1387,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @importFrom sf st_polygon
 #' @export
 
-create_mask <- function(pressure_data, n_verts = 4, image = "max",
+create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
                         preview = TRUE) {
   # global variables
   x <- y <- NULL
@@ -1400,25 +1401,54 @@ create_mask <- function(pressure_data, n_verts = 4, image = "max",
   g <- plot_pressure(pressure_data)
   print(g)
 
-  # interactively select area
-  message("Select footprint")
-  mask <- gglocator(n_verts)
-  mask <- data.frame(x = mask[, 1], y = mask[, 2])
-  mask <- mask[c(1:nrow(mask), 1), ]
+  mask_vertices <-data.frame(x,y)
 
-  # preview
-  if (preview == TRUE) {
-    g <- g + geom_path(data = mask, aes(x, y), color = "red")
-    print(g)
+  for(mask_n in 1:n_masks){
+    # interactively select area
+    message("Select mask corners")
+    mask <- gglocator(n_verts)
+
+    # allow closely selected mask vertices to share a vertex
+    mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts + 4), 1] <-
+      mask[, 1]
+    mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts +
+                                                  4), 2] <-
+      mask[, 2]
+    if (mask_n > 1) {
+      v_distance <- as.matrix(dist(mask_vertices))
+      close_v <-
+        which((v_distance < 0.005) &
+                (v_distance > 0), arr.ind = TRUE)
+      for (change_v in 1:nrow(close_v) / 2) {
+        mask[close_v[change_v, 1] - ((mask_n - 1) * 4), 1] <-
+          mask_vertices[close_v[change_v, 2], 1]
+        mask[close_v[change_v, 1] - ((mask_n - 1) * 4), 2] <-
+          mask_vertices[close_v[change_v, 2], 2]
+        mask_vertices[close_v[change_v, 1], 1] <-
+          mask_vertices[close_v[change_v, 2], 1]
+        mask_vertices[close_v[change_v, 1], 2] <-
+          mask_vertices[close_v[change_v, 2], 2]
+
+      }
+    }
+
+    mask <- data.frame(x = mask[, 1], y = mask[, 2])
+    mask <- mask[c(1:nrow(mask), 1), ]
+
+    # preview
+    if (preview == TRUE) {
+      g <- g + geom_path(data = mask, aes(x, y), color = "red")
+      print(g)
+    }
+
+    # mask to polygon
+    mask_pol <- st_polygon(list(as.matrix(mask)))
+
+    # update mask list
+    mask_list <- pressure_data[[5]]
+    mask_list[[length(mask_list) + 1]] <- mask_pol
+    pressure_data[[5]] <- mask_list
   }
-
-  # mask to polygon
-  mask_pol <- st_polygon(list(as.matrix(mask)))
-
-  # update mask list
-  mask_list <- pressure_data[[5]]
-  mask_list[[length(mask_list) + 1]] <- mask_pol
-  pressure_data[[5]] <- mask_list
 
   # return pressure frames for selected area
   return(pressure_data)
@@ -1432,6 +1462,7 @@ create_mask <- function(pressure_data, n_verts = 4, image = "max",
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
+#' @param n_edit Numeric. Number of vertices to edit
 #' @return List.
 #' @examples
 #' \dontrun{
@@ -1439,11 +1470,79 @@ create_mask <- function(pressure_data, n_verts = 4, image = "max",
 #' }
 #' @export
 
-edit_mask <- function(pressure_data) {
+edit_mask <- function(pressure_data, n_edit) {
   # check session is interactive
-  if (interactive() == FALSE)
+  if (interactive() == FALSE) {
     stop("user needs to select mask vertices")
+  }
 
+  # plot footprint
+  grDevices::x11()
+  g <- plot_pressure(pressure_data)
+  print(g)
+
+  # plot original mask data
+  mask_org <- pressure_data[[5]]
+  mask_vertices <- data.frame(x, y)
+  n_verts <- length(pressure_data[[5]][[1]][1][[1]][, 1])
+
+  for (n_mask in 1:length(pressure_data[[5]])) {
+    mask_range <- ((n_mask - 1) * n_verts + 1):((n_mask - 1) * n_verts + n_verts)
+    mask_vertices[mask_range, 1:2] <-
+      mask_org[[n_mask]][1][[1]][1:n_verts, 1:2]
+
+    g <-
+      g + geom_path(data = mask_vertices[mask_range,], aes(V1, V2), color = "red")
+    print(g)
+  }
+
+  # select point near edit vertex and select new value
+  for (edit in seq(1, n_edit)) {
+    message("Select mask vertex to edit, then it's new location")
+    mask <- gglocator(2)
+    mask_vertices_edit <- mask_vertices
+    mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
+    v_distance <- as.matrix(dist(mask_vertices_edit))
+    close_v <-
+      which((v_distance < 0.005) & (v_distance > 0), arr.ind = TRUE)
+
+    while (nrow(close_v) == 0) {
+      message("The point selected isn't close to any existing vertex, try again")
+      mask <- gglocator(2)
+      mask_vertices_edit <- mask_vertices
+      mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <-
+        mask[1,]
+      v_distance <- as.matrix(dist(mask_vertices_edit))
+      close_v <-
+        which((v_distance < 0.005) &
+                (v_distance > 0), arr.ind = TRUE)
+    }
+
+    for (edit_v in seq(1, nrow(close_v) / 2)) {
+      mask_idx <-  close_v[edit_v, 2] %% n_verts
+      if (mask_idx == 0) {
+        mask_idx <- n_verts
+      }
+      mask_n <- ((close_v[edit_v, 2] - mask_idx) / n_verts) + 1
+      mask_vertices[close_v[edit_v, 2],] <- mask[2,]
+      new_mask_v <-
+        mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts + n_verts),]
+
+
+      if (is.na(match(close_v[edit_v, 2], seq(1, nrow(
+        mask_vertices
+      ), by = n_verts)))) {
+        g <-
+          g + geom_path(data = new_mask_v, aes(V1, V2), color = "blue")
+        print(g)
+        pressure_data[[5]][[mask_n]] <-
+          st_polygon(list(as.matrix(new_mask_v)))
+      }
+    }
+  }
+
+  # return pressure frames for selected area
+  return(pressure_data)
 }
 
 
