@@ -1201,7 +1201,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' pressure_data[[5]] <- automask(pressure_data, foot_side = "auto", plot = TRUE)
+#' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' @importFrom zoo rollapply
 #' @importFrom sf st_union st_difference
 #' @export
@@ -1357,7 +1357,8 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
   }
 
   # Return masks for analysis
-  return(mask_list)
+  pressure_data[[5]] <- mask_list
+  return(pressure_data)
 }
 
 
@@ -1466,7 +1467,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
 #' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' pressure_data[[5]] <- automask(pressure_data, foot_side = "auto", plot = TRUE)
+#' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' edit_mask(pressure_data)
 #' }
 #' @export
