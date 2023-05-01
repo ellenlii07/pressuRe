@@ -1201,7 +1201,7 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' masks <- automask(pressure_data, foot_side = "auto", plot = TRUE)
+#' pressure_data[[5]] <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' @importFrom zoo rollapply
 #' @importFrom sf st_union st_difference
 #' @export
@@ -1373,8 +1373,9 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @param n_verts Numeric. Number of vertices in mask
 #' @param n_masks Numeric. Number of masks to add
 #' @param preview Logical. Show new maks on pressure image
-#' @return List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
-#'   selected region. z dimension represents time
+#' @return List New mask is added to the relevant A 3D array covering each
+#' timepoint of the measurement for the selected region. z dimension represents
+#' time
 #' @examples
 #' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
@@ -1387,7 +1388,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @importFrom sf st_polygon
 #' @export
 
-create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
+create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
                         preview = TRUE) {
   # global variables
   x <- y <- NULL
@@ -1401,7 +1402,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
   g <- plot_pressure(pressure_data)
   print(g)
 
-  mask_vertices <-data.frame(x,y)
+  mask_vertices <- data.frame(x, y)
 
   for(mask_n in 1:n_masks){
     # interactively select area
@@ -1416,9 +1417,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
       mask[, 2]
     if (mask_n > 1) {
       v_distance <- as.matrix(dist(mask_vertices))
-      close_v <-
-        which((v_distance < 0.005) &
-                (v_distance > 0), arr.ind = TRUE)
+      close_v <- which((v_distance < 0.005) & (v_distance > 0), arr.ind = TRUE)
       for (change_v in 1:nrow(close_v) / 2) {
         mask[close_v[change_v, 1] - ((mask_n - 1) * 4), 1] <-
           mask_vertices[close_v[change_v, 2], 1]
@@ -1428,7 +1427,6 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
           mask_vertices[close_v[change_v, 2], 1]
         mask_vertices[close_v[change_v, 1], 2] <-
           mask_vertices[close_v[change_v, 2], 2]
-
       }
     }
 
@@ -1466,6 +1464,9 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 5, image = "max",
 #' @return List.
 #' @examples
 #' \dontrun{
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' pressure_data[[5]] <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' edit_mask(pressure_data)
 #' }
 #' @export
@@ -2698,7 +2699,6 @@ binned_pal <- function(palette) {
     palette(length(x))
   }
 }
-
 
 
 rot_line <- function(line, ang, cnt) {
