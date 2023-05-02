@@ -26,7 +26,7 @@ Automatically create mask of footprint data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
+masks <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -4,13 +4,11 @@
 \alias{edit_mask}
 \title{Edit mask}
 \usage{
-edit_mask(pressure_data, n_edit)
+edit_mask(pressure_data)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
-
-\item{n_edit}{Numeric. Number of vertices to edit}
 }
 \value{
 List.
@@ -20,9 +18,6 @@ Manually edit mask
 }
 \examples{
 \dontrun{
-emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-pressure_data <- load_emed(emed_data)
-pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 edit_mask(pressure_data)
 }
 }
