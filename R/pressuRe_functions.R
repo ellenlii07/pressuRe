@@ -829,6 +829,10 @@ cop <- function(pressure_data) {
   if (is.array(pressure_data[[1]]) == FALSE)
     stop("pressure_frames input must contain an array")
 
+  # check not pedar
+  if (pressure_data[[2]] == "pedar")
+    stop("pedar data currently not supported for this function")
+
   # array dimensions
   x <- pressure_data[[1]]
   dims <- dim(x)
