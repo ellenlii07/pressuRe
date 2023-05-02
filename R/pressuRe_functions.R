@@ -1215,6 +1215,10 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
 automask <- function(pressure_data, foot_side = "auto", mask_scheme,
                      plot = FALSE) {
+  # check data isn't from pedar
+  if (pressure_data[[2]] == "pedar")
+    stop("automask doesn't work with pedar data")
+
   # global variables
   x <- y <- mask <- x_coord <- y_coord <- me <- heel_cut_dist <-
     mfoot_cut_prox <- ffoot_cut_prox <- NULL
