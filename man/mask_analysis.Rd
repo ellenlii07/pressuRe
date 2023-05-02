@@ -6,7 +6,6 @@
 \usage{
 mask_analysis(
   pressure_data,
-  masks,
   partial_sensors = FALSE,
   variable = "press_peak_sensor",
   pressure_units = "kPa",
@@ -16,8 +15,6 @@ mask_analysis(
 \arguments{
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
 measurement. z dimension represents time}
-
-\item{masks}{List. Masks used to define the regions to be analysed}
 
 \item{partial_sensors}{Logical Defines how sensors that do not
 lie wholly within mask are dealt with. If FALSE, they will be excluded;
@@ -44,7 +41,7 @@ Analyze masked regions of pressure data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-masks <- automask(pressure_data)
+pressure_data <- automask(pressure_data)
 mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 }
 \author{
