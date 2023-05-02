@@ -3,7 +3,6 @@
 # more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
 # add support for pliance
-# edit mask needs to be written
 # add more input tests to throw errors
 # cop for pedar
 # check/make pedar work for a lot of these functions
@@ -1459,7 +1458,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
 
     # preview
     if (preview == TRUE) {
-      g <- g + geom_path(data = mask, aes(x, y), color = "blue")
+      g <- g + geom_path(data = mask, aes(x, y), color = "blue", linewidth = 2)
       print(g)
     }
 
@@ -2056,7 +2055,6 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param masks List. Masks used to define the regions to be analysed
 #' @param partial_sensors Logical Defines how sensors that do not
 #'   lie wholly within mask are dealt with. If FALSE, they will be excluded;
 #'   if TRUE, for relevant variables their contribution will be weighted by the
@@ -2073,17 +2071,22 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' masks <- automask(pressure_data)
+#' pressure_data <- automask(pressure_data)
 #' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
 
-mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
+mask_analysis <- function(pressure_data, partial_sensors = FALSE,
                           variable = "press_peak_sensor",
                           pressure_units = "kPa", area_units = "cm2") {
   # set global variables
   sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
+
+  # check if masks exist
+  if (length(pressure_data[[5]]) < 1)
+    stop("no masks found for data")
+  masks <- pressure_data[[5]]
 
   # set up mask/sensor areas
   ## sensor area
