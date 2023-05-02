@@ -961,7 +961,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @export
 
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
-                          step_n, plot_COP = FALSE, plot_outline = FALSE,
+                          step_n = "max", plot_COP = FALSE, plot_outline = FALSE,
                           plot_colors = "default", break_values, break_colors,
                           plot = TRUE, legend = TRUE) {
   # set global variables
@@ -973,10 +973,12 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # if pedar
   if (pressure_data[[2]] == "pedar") {
-    cor <- plot_pedar(pressure_data, variable, step_n)
+    if (step_n == "max") {pedar_var <- "max"; step_no <- NA}
+    if (is.numeric(step_n)) {pedar_var <- "step_max"; step_no <- step_n}
+    cor <- plot_pedar(pressure_data, pedar_var, step_no, foot_side = "both")
     x_lim <- max(cor$x)
     y_lim <- max(cor$y)
-    legend_spacing <- (cor$x[2]-cor$x[1])* 10
+    legend_spacing <- (cor$x[2] - cor$x[1]) * 10
   } else {
     # max size of df
     fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
@@ -1054,7 +1056,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                  legend.box.spacing = unit(legend_spacing, "cm"))
   if (legend == FALSE) {g <- g + theme(legend.position = "none")}
 
-  # display plot immediately if requested
+  # display plot if requested
   if (plot == TRUE) {print(g)}
 
   # return ggplot object
