@@ -496,8 +496,8 @@ select_steps <- function (pressure_data, threshold_R = 30,
     stop("data should be from pedar or f-scan")
 
   # make force vectors
-  force_R <- force_pedar(pressure_data, "right")
-  force_L <- force_pedar(pressure_data, "left")
+  force_R <- force_pedar(pressure_data)[,1]
+  force_L <- force_pedar(pressure_data)[,2]
 
   # Adjust thresholds to avoid errors
   threshold_R <- threshold_R + 0.01
@@ -975,6 +975,9 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   # if pedar
   if (pressure_data[[2]] == "pedar") {
     cor <- plot_pedar(pressure_data, variable, step_n)
+    x_lim <- max(cor$x)
+    y_lim <- max(cor$y)
+    legend_spacing <- (cor$x[2]-cor$x[1])* 10
   } else {
     # max size of df
     fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
@@ -1003,6 +1006,9 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
     # add colors
     cor <- generate_colors(cor, col_type = plot_colors, break_values,
                            break_colors)
+
+    # plot
+    legend_spacing <- pressure_data[[3]][1] * 100
   }
 
   if (plot_colors == "default") {
@@ -1046,7 +1052,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
   g <- g + theme_void()
   g <- g + theme(panel.background = element_rect(fill = "white",
                                                  colour = "white"),
-                 legend.box.spacing = unit(pressure_data[[3]][1] * 100, "cm"))
+                 legend.box.spacing = unit(legend_spacing, "cm"))
   if (legend == FALSE) {g <- g + theme(legend.position = "none")}
 
   # display plot immediately if requested
@@ -1349,8 +1355,8 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 
     # Plot footprint and masks
     g <- plot_pressure(pressure_data, "max", plot = FALSE)
-    g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.12))
-    g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.28))
+    g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.15))
+    g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.30))
     g <- g + geom_path(data = mask_df, aes(x = x, y = y, group = mask),
                        color = "red", linewidth = 1)
     print(g)
@@ -1373,6 +1379,9 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #'   average value of sensors over time (usually for static analyses)
 #' @param n_verts Numeric. Number of vertices in mask
 #' @param n_masks Numeric. Number of masks to add
+#' @param threshold Numeric. Distance between adjacent mask vertices before
+#' sharing vertex coordinates
+#' @param exisiting_mask Logical. Show exisiting masks
 #' @param preview Logical. Show new maks on pressure image
 #' @return List New mask is added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
@@ -1389,7 +1398,8 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @importFrom sf st_polygon
 #' @export
 
-create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
+create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
+                        threshold = 0.005, exisiting_mask = TRUE, image = "max",
                         preview = TRUE) {
   # global variables
   x <- y <- NULL
@@ -1398,36 +1408,49 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
   if (interactive() == FALSE)
     stop("user needs to select mask vertices")
 
-  # plot footprint
-  grDevices::x11()
-  g <- plot_pressure(pressure_data)
-  print(g)
+  # plot existing masks or just footprint
+  if(exisiting_mask == TRUE){
+    if(length(pressure_data[[5]]) > 0){
+    g <- plot_masks(pressure_data)
+    }
+  }else{
+    grDevices::x11()
+    g <- plot_pressure(pressure_data, image, plot = FALSE)
+    g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.15))
+    g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.30))
+    print(g)
+  }
 
-  mask_vertices <- data.frame(x, y)
+  mask_vertices <- data.frame(x = double(), y = double())
+
 
   for(mask_n in 1:n_masks){
     # interactively select area
     message("Select mask corners")
     mask <- gglocator(n_verts)
+    valid_mask <- which(dist(mask) < threshold)
+
+    while(length(valid_mask) > 0){
+      message("Some vertices are closer than your designated threshold. Reselect mask corners.")
+      mask <- gglocator(n_verts)
+      valid_mask <- which(dist(mask) < threshold)
+    }
 
     # allow closely selected mask vertices to share a vertex
-    mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts + 4), 1] <-
-      mask[, 1]
-    mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts +
-                                                  4), 2] <-
-      mask[, 2]
+    mask_vertices[(nrow(mask_vertices)+1):(nrow(mask_vertices)+n_verts),] <-
+      mask
+
     if (mask_n > 1) {
       v_distance <- as.matrix(dist(mask_vertices))
-      close_v <- which((v_distance < 0.005) & (v_distance > 0), arr.ind = TRUE)
+      close_v <- which((v_distance < threshold) & (v_distance > 0), arr.ind = TRUE)
       for (change_v in 1:nrow(close_v) / 2) {
-        mask[close_v[change_v, 1] - ((mask_n - 1) * 4), 1] <-
+        mask[close_v[change_v, 1] - ((mask_n - 1) * n_verts), 1] <-
           mask_vertices[close_v[change_v, 2], 1]
-        mask[close_v[change_v, 1] - ((mask_n - 1) * 4), 2] <-
+        mask[close_v[change_v, 1] - ((mask_n - 1) * n_verts), 2] <-
           mask_vertices[close_v[change_v, 2], 2]
-        mask_vertices[close_v[change_v, 1], 1] <-
-          mask_vertices[close_v[change_v, 2], 1]
-        mask_vertices[close_v[change_v, 1], 2] <-
-          mask_vertices[close_v[change_v, 2], 2]
+        mask_vertices[close_v[change_v, 1], ] <-
+          mask_vertices[close_v[change_v, 2], ]
+
       }
     }
 
@@ -1436,7 +1459,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
 
     # preview
     if (preview == TRUE) {
-      g <- g + geom_path(data = mask, aes(x, y), color = "red")
+      g <- g + geom_path(data = mask, aes(x, y), color = "blue")
       print(g)
     }
 
@@ -1457,12 +1480,21 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
 # =============================================================================
 
 #' @title Edit mask
-#' @description Manually edit mask
+#' @description Manually edit mask, also simplifies automask vertices to the
+#' threshold value
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_edit Numeric. Number of vertices to edit
-#' @return List.
+#' @param threshold Numeric. Distance between point clicked and vertex that is
+#' selected (smaller thresholds are recommended when editing automasks becasue
+#' they contain more vertices in the polygon)
+#' @param edit_list List. Mask numbers that want to be edited. (Default is to
+#' load all masks so that adjacent masks with shared coordinates are modified
+#' together)
+#' @return List. Edited mask is added to the relevant A 3D array covering each
+#' timepoint of the measurement for the selected region. z dimension represents
+#' time
 #' @examples
 #' \dontrun{
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
@@ -1472,78 +1504,182 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1, image = "max",
 #' }
 #' @export
 
-edit_mask <- function(pressure_data, n_edit) {
+edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
+                      edit_list = seq(1,length(pressure_data[[5]]))) {
   # check session is interactive
   if (interactive() == FALSE) {
     stop("user needs to select mask vertices")
   }
 
-  # plot footprint
-  grDevices::x11()
-  g <- plot_pressure(pressure_data)
-  print(g)
+  if(n_edit > 0){
+    # plot original mask data
+    g <- plot_masks(pressure_data)
 
-  # plot original mask data
-  mask_org <- pressure_data[[5]]
-  mask_vertices <- data.frame(x, y)
-  n_verts <- length(pressure_data[[5]][[1]][1][[1]][, 1])
+    # compile all mask vertices
+    mask_org <- pressure_data[[5]]
+    mask_vertices_edit <- data.frame(x = double(), y = double())
 
-  for (n_mask in 1:length(pressure_data[[5]])) {
-    mask_range <- ((n_mask - 1) * n_verts + 1):((n_mask - 1) * n_verts + n_verts)
-    mask_vertices[mask_range, 1:2] <-
-      mask_org[[n_mask]][1][[1]][1:n_verts, 1:2]
+    for (n_mask in edit_list) {
+      mask_vertices <- data.frame(st_coordinates(mask_org[[n_mask]])[,1:2])
+      mask_vertices_edit[(nrow(mask_vertices_edit)+ 1):(nrow(mask_vertices)+ nrow(mask_vertices_edit)), ] <- mask_vertices
+    }
 
-    g <-
-      g + geom_path(data = mask_vertices[mask_range,], aes(V1, V2), color = "red")
-    print(g)
-  }
-
-  # select point near edit vertex and select new value
-  for (edit in seq(1, n_edit)) {
-    message("Select mask vertex to edit, then it's new location")
-    mask <- gglocator(2)
-    mask_vertices_edit <- mask_vertices
-    mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
-    v_distance <- as.matrix(dist(mask_vertices_edit))
-    close_v <-
-      which((v_distance < 0.005) & (v_distance > 0), arr.ind = TRUE)
-
-    while (nrow(close_v) == 0) {
-      message("The point selected isn't close to any existing vertex, try again")
+    # select point near edit vertex and select new value
+    color_v <- rainbow(n_edit+1)
+    for(edit in seq(1,n_edit)){
+      message("Select mask vertex to edit, then it's new location")
       mask <- gglocator(2)
-      mask_vertices_edit <- mask_vertices
-      mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <-
-        mask[1,]
-      v_distance <- as.matrix(dist(mask_vertices_edit))
+      mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
+      edit_distance <- as.matrix(dist(mask_vertices_edit))
       close_v <-
-        which((v_distance < 0.005) &
-                (v_distance > 0), arr.ind = TRUE)
+        which((edit_distance[nrow(mask_vertices_edit),] < threshold) &
+                (edit_distance[nrow(mask_vertices_edit),] > 0), arr.ind = TRUE)
+
+      while (length(close_v) == 0) {
+        message("The point selected isn't close to any existing vertex, try again")
+        mask <- gglocator(2)
+        mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
+        edit_distance <- as.matrix(dist(mask_vertices_edit))
+        close_v <-
+          which((edit_distance[nrow(mask_vertices_edit),] < threshold) &
+                  (edit_distance[nrow(mask_vertices_edit),] > 0), arr.ind = TRUE)
+      }
+
+      for (n_mask in edit_list) {
+        mask_vertices <- data.frame(st_coordinates(mask_org[[n_mask]])[,1:2])
+        new_mask_v <- mask_vertices
+        mask_vertices[nrow(mask_vertices)+1,] <- mask[1,]
+        v_distance <- as.matrix(dist(mask_vertices))
+        v_distance[upper.tri(v_distance)] <- 0.0
+        close_selected <-  which((v_distance[nrow(mask_vertices),] < threshold)
+                                 & (v_distance[nrow(mask_vertices),] > 0), arr.ind = TRUE)
+
+        if(length(close_selected) > 0){
+          message(n_mask, ":", close_selected)
+
+          if(close_selected[1] == 1){
+            new_mask_v[c(1, nrow(new_mask_v)),] <- mask[2,]
+            close_selected <- head(close_selected[-1],-1)
+          }
+          if(length(close_selected) > 0){
+            new_mask_v[close_selected[1],] <- mask[2,]
+            if(length(close_selected) > 1){
+              new_mask_v <- new_mask_v[-tail(close_selected,-1),]
+            }
+
+          }
+
+
+          g <- g + geom_path(data = new_mask_v, aes(X, Y), color = color_v[edit+1])
+
+          mask_org[[n_mask]] <-
+            st_polygon(list(as.matrix(new_mask_v)))
+
+        }
+      }
+
+      print(g)
     }
 
-    for (edit_v in seq(1, nrow(close_v) / 2)) {
-      mask_idx <-  close_v[edit_v, 2] %% n_verts
-      if (mask_idx == 0) {
-        mask_idx <- n_verts
-      }
-      mask_n <- ((close_v[edit_v, 2] - mask_idx) / n_verts) + 1
-      mask_vertices[close_v[edit_v, 2],] <- mask[2,]
-      new_mask_v <-
-        mask_vertices[((mask_n - 1) * n_verts + 1):((mask_n - 1) * n_verts + n_verts),]
-
-
-      if (is.na(match(close_v[edit_v, 2], seq(1, nrow(
-        mask_vertices
-      ), by = n_verts)))) {
-        g <-
-          g + geom_path(data = new_mask_v, aes(V1, V2), color = "blue")
-        print(g)
-        pressure_data[[5]][[mask_n]] <-
-          st_polygon(list(as.matrix(new_mask_v)))
-      }
-    }
+    # return pressure frames for selected area
+    pressure_data[[5]] <- mask_org
+    return(pressure_data)
+  }else{
+    message("You must edit at least one vertex, change the value for 'n_edit'")
   }
 
-  # return pressure frames for selected area
+}
+
+
+
+# =============================================================================
+
+#' @title Pedar mask template
+#' @description Add a Pedar mask template using 3 in current literature
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement.
+#' @param mask_type String.
+#' "mask1" splits the insole into 4 regions using sensel boundaries:
+#' rearfoot, midfoot, forefoot, and toes-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9470545/
+#' "mask2" splits the insole into 4 regions using percentages:
+#' rearfoot, forefoot, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-18
+#' "mask3" splits the foot into 9 regions using sensel boundaries:
+#'  medial rearfoot, lateral rearfoot, medial midfoot, lateral midfoot, MTPJ1,
+#'  MTPJ2-3, MTPJ4-5, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-20
+#' @param plot. Logical. Plot masks if TRUE
+#' @return List. Masks are added to the relevant A 3D array covering each
+#' timepoint of the measurement for the selected region. z dimension represents
+#' time
+#' @examples
+#' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
+#' pressure_data <- load_pedar(pedar_data)
+#' pressure_data <- pedar_mask(pressure_data, "mask1")
+#' @export
+
+pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
+
+  # set global variables
+  pedar_insole_grid <- x <- y <- id <- NULL
+
+  # check this is pedar (or other suitable) data
+  if (!(pressure_data[[2]] == "pedar"))
+    stop("data should be from pedar")
+
+  # load pedar coords
+  load("data/pedar_insole_grid.rda")
+
+  # add coordinates to df
+  xs <- c()
+  for (i in c(101:199, 1:99)) {
+    for (j in c(1, 3, 5, 7)) {xs = append(xs, pedar_insole_grid[i, j])}
+  }
+  ys <- c()
+  for (i in c(101:199, 1:99)) {
+    for (j in c(2, 4, 6, 8)) {ys = append(ys, pedar_insole_grid[i, j])}
+  }
+
+  # make ids
+  ids <- c()
+  for (i in 1:99) {ids = append(ids,  i)} #left
+  for (i in 1:99) {ids = append(ids, i)} #right
+
+  position <- data.frame(id = rep(ids, each = 4), x = xs, y = ys)
+
+  # defines the sensels or percentages for masking
+  if(mask_type == "mask1"){
+    rearfoot_L <- pedar_polygon(position, 1:26, "L")
+    midfoot_L <-pedar_polygon(position, 27:54, "L")
+    forefoot_L <- pedar_polygon(position, 55:82, "L")
+    toes_L <- pedar_polygon(position, 83:99, "L")
+
+    rearfoot_R <- pedar_polygon(position, 1:26, "R")
+    midfoot_R <-pedar_polygon(position, 27:54, "R")
+    forefoot_R <- pedar_polygon(position, 55:82, "R")
+    toes_R <- pedar_polygon(position, 83:99, "R")
+
+    mask_list <- list(L_rearfoot_mask = rearfoot_L,
+                        L_midfoot_mask = midfoot_L,
+                        L_forefoot_mask = forefoot_L,
+                        L_toes_mask = toes_L,
+                        R_rearfoot_mask = rearfoot_R,
+                        R_midfoot_mask = midfoot_R,
+                        R_forefoot_mask = forefoot_R,
+                        R_toes_mask = toes_R)
+
+      pressure_data[[5]] <- mask_list
+
+  }else if(mask_type == "mask2"){
+
+  }else if(mask_type == "mask3"){
+
+  }else{
+    stop("Please select an existing mask.")
+  }
+
+  if(plot == TRUE){
+    plot_masks(pressure_data)
+  }
   return(pressure_data)
 }
 
@@ -2282,6 +2418,9 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
   # change array direction
   force_array <- aperm(pressure_data[[1]], c(3, 2, 1))
 
+  # output
+  output_df = data.frame()
+
   # calculate force
   if (variable == "force") {
     force_right <- rowSums(force_array[, , 1] * pedarSensorAreas)
@@ -2310,7 +2449,7 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
 #' @param foot_side String. "both", "left", or "right"
 #' @param step_n Numeric. If pressure_image is "step_max", the step number to
 #' analyze
-#' @return ggplot object
+#' @return df
 #' @noRd
 plot_pedar <- function(pressure_data, pressure_image = "max",
                        foot_side = "left", step_n) {
@@ -2372,10 +2511,10 @@ plot_pedar <- function(pressure_data, pressure_image = "max",
 
   # side
   if (foot_side == "left") {
-    df <- df[397:792]
+    df <- df[397:792,]
   }
   if (foot_side == "right") {
-    df <- df[1:396]
+    df <- df[1:396,]
   }
 
   # return
@@ -2707,4 +2846,90 @@ rot_line <- function(line, ang, cnt) {
   new_line <- (line - cnt) * matrix(c(cos(ang_), sin(ang_),
                                       -sin(ang_), cos(ang_)), 2, 2) + cnt
   return(new_line)
+}
+
+#' @title Visual masks
+#' @description Visualize the existing masks
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. First item is a 3D array covering each timepoint
+#' of the measurement.
+#' @param visual_list List. Mask numbers that want to be viewed. (Default is
+#' all exisiting masks)
+#' @return ggplot plot object
+#' @examples
+#' \dontrun{
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
+#' plot_masks(pressure_data)
+#' }
+#' @export
+
+plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[[5]]))){
+
+  # plot footprint
+  grDevices::x11()
+  g <- plot_pressure(pressure_data, step_n = 2, plot = FALSE)
+  if (pressure_data[[2]] != "pedar"){
+    g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.15))
+    g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.30))
+  }
+  print(g)
+
+  # plot original mask data
+  for (n_mask in visual_list) {
+    g <-
+      g + geom_path(data = data.frame(st_coordinates(pressure_data[[5]][[n_mask]])[,1:2]), aes(X, Y), color = "red")
+  }
+  print(g)
+
+  return(g)
+}
+
+#' @title Pedar mask regions
+#' @description Creates a mask region from pedar sensel coordinates
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param position Dataframe. A n x 3 dataframe of sensel coordinates
+#' [sensel id, x,y]
+#' @param sensel_list List. List of sensels to include
+#' @param foot_side String. "L" for left foot, "R" for right foot
+#' @return polygon. A mask polygon
+#' @export
+
+pedar_polygon <- function(position, sensel_list, foot_side){
+
+  # mask value based on insole side
+  if(foot_side == "L"){
+    coord <- subset(position[1:(99*4),], id %in% sensel_list)
+  }else if(foot_side == "R"){
+    coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
+  }
+
+  # mask from convex hull of sensel vertices
+  sens_coords<-data.frame(x_coord= double(), y_coord = double())
+  sens_coords[1:(length(sensel_list)*4),] <- coord[,2:3]
+  df_sf <- sens_coords %>%
+    st_as_sf(coords = c( "x_coord", "y_coord" ))
+  fp_chull <- st_convex_hull(st_union(df_sf))
+
+  # sensel 48 is slanted, so this will account for it in the mask
+  if(length(which(sensel_list %in% 48)) > 0){
+    mask_y <- min(sens_coords$y_coord)
+    if(foot_side == "L"){
+      tri_coord <- subset(position[1:(99*4),], id %in% 48)
+      mask_x <- max(subset(coord, y %in% min_y)[,2])
+    }else if(foot_side == "R"){
+      coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
+      tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  48)
+      mask_x <- min(subset(coord, y %in% min_y)[,2])
+    }
+    tri_coords <- data.frame(x_coord= double(), y_coord = double())
+    tri_coords[1:2,] <- tri_coord[c(2,3),2:3]
+    tri_coords[3,] <-c(mask_x, mask_y)
+    tri_coords[4,] <- tri_coord[2,2:3]
+    tri_sf <-  st_polygon(list(as.matrix(tri_coords)))
+    fp_chull <- st_difference(fp_chull, tri_sf)
+  }
+
+  return(fp_chull)
 }
