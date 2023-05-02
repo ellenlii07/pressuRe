@@ -1615,6 +1615,7 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
 #' pressure_data <- load_pedar(pedar_data)
 #' pressure_data <- pedar_mask(pressure_data, "mask1")
+#' @importFrom sf st_union st_difference st_bbox
 #' @export
 
 pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
@@ -1670,9 +1671,165 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
       pressure_data[[5]] <- mask_list
 
   }else if(mask_type == "mask2"){
+    bbox_L <- sf::st_bbox(pedar_polygon(position, 1:99, "L"))
+    outline_mask <- pedar_polygon(position, 1:99, "L")
 
+    rearfoot_line_Ly <- (bbox_L$ymax-bbox_L$ymin)/2 + bbox_L$ymin
+    forefoot_line_Ly <- (bbox_L$ymax-bbox_L$ymin)*.85 + bbox_L$ymin
+    hallux_line_Lx <- bbox_L$xmax - (bbox_L$xmax-bbox_L$xmin)*.35
+
+    rearfoot_line_L <- data.frame(x_coord = c(bbox_L$xmin,bbox_L$xmax),
+                                y_coord =  c(rearfoot_line_Ly,rearfoot_line_Ly))
+    rearfoot_line_L <- st_extend_line(st_linestring(as.matrix(rearfoot_line_L)),1)
+    rearfoot_line_L_dist <- st_line2polygon(rearfoot_line_L, 1, "+Y")
+    rearfoot_L <- st_difference(outline_mask, rearfoot_line_L_dist)
+
+    forefoot_line_L <- data.frame(x_coord = c(bbox_L$xmin,bbox_L$xmax),
+                                  y_coord =  c(forefoot_line_Ly,forefoot_line_Ly))
+    forefoot_line_L <- st_extend_line(st_linestring(as.matrix(forefoot_line_L)),1)
+    forefoot_line_L_dist <- st_line2polygon(forefoot_line_L, 1, "+Y")
+    forefoot_line_L_prox <- st_line2polygon(forefoot_line_L, 1, "-Y")
+    forefoot_L <- st_difference(outline_mask, forefoot_line_L_dist)
+
+    toes_L <- st_difference(outline_mask, forefoot_line_L_prox)
+    hallux_line_L <- data.frame(x_coord = c(hallux_line_Lx,hallux_line_Lx),
+                                  y_coord =  c(bbox_L$ymin,bbox_L$ymax))
+    hallux_line_L <- st_extend_line(st_linestring(as.matrix(hallux_line_L)),1)
+    hallux_line_L_lat <- st_line2polygon(hallux_line_L, 1, "-X")
+    hallux_line_L_med <- st_line2polygon(hallux_line_L, 1, "+X")
+    hallux_L <- st_difference(toes_L, hallux_line_L_lat)
+    lesser_toes_L <- st_difference(toes_L, hallux_line_L_med)
+
+    bbox_R <- sf::st_bbox(pedar_polygon(position, 1:99, "R"))
+    outline_mask <- pedar_polygon(position, 1:99, "R")
+
+    rearfoot_line_Ry <- (bbox_R$ymax-bbox_R$ymin)/2 + bbox_R$ymin
+    forefoot_line_Ry <- (bbox_R$ymax-bbox_R$ymin)*.85 + bbox_R$ymin
+    hallux_line_Rx <- bbox_R$xmin + (bbox_R$xmax-bbox_R$xmin)*.35
+
+    rearfoot_line_R <- data.frame(x_coord = c(bbox_R$xmin,bbox_R$xmax),
+                                  y_coord =  c(rearfoot_line_Ry,rearfoot_line_Ry))
+    rearfoot_line_R <- st_extend_line(st_linestring(as.matrix(rearfoot_line_R)),1)
+    rearfoot_line_R_dist <- st_line2polygon(rearfoot_line_R, 1, "+Y")
+    rearfoot_R <- st_difference(outline_mask, rearfoot_line_R_dist)
+
+    forefoot_line_R <- data.frame(x_coord = c(bbox_R$xmin,bbox_R$xmax),
+                                  y_coord =  c(forefoot_line_Ry,forefoot_line_Ry))
+    forefoot_line_R <- st_extend_line(st_linestring(as.matrix(forefoot_line_R)),1)
+    forefoot_line_R_dist <- st_line2polygon(forefoot_line_R, 1, "+Y")
+    forefoot_line_R_prox <- st_line2polygon(forefoot_line_R, 1, "-Y")
+    forefoot_R <- st_difference(outline_mask, forefoot_line_R_dist)
+
+    toes_R <- st_difference(outline_mask, forefoot_line_R_prox)
+    hallux_line_R <- data.frame(x_coord = c(hallux_line_Rx,hallux_line_Rx),
+                                y_coord =  c(bbox_R$ymin,bbox_R$ymax))
+    hallux_line_R <- st_extend_line(st_linestring(as.matrix(hallux_line_R)),1)
+    hallux_line_R_lat <- st_line2polygon(hallux_line_R, 1, "+X")
+    hallux_line_R_med <- st_line2polygon(hallux_line_R, 1, "-X")
+    hallux_R <- st_difference(toes_R, hallux_line_R_lat)
+    lesser_toes_R <- st_difference(toes_R, hallux_line_R_med)
+
+    mask_list <- list(L_rearfoot_mask = rearfoot_L,
+                      L_forefoot_mask = forefoot_L,
+                      L_hallux_mask = hallux_L,
+                      L_lesser_toes_mask = lesser_toes_L,
+                      R_rearfoot_mask = rearfoot_R,
+                      R_forefoot_mask = forefoot_R,
+                      R_hallux_mask = hallux_R,
+                      R_lesser_toes_mask = lesser_toes_R)
+
+    pressure_data[[5]] <- mask_list
   }else if(mask_type == "mask3"){
+    med_rf_L <- st_union(pedar_polygon(position, c(1:2), "L"),
+                         st_union(pedar_polygon(position, c(6:8), "L"),
+                         st_union(pedar_polygon(position, c(13:15), "L"),
+                                  pedar_polygon(position, c(20:22), "L"))))
+    lat_rf_L <- st_union(pedar_polygon(position, c(3:5), "L"),
+                         st_union(pedar_polygon(position, c(9:12), "L"),
+                                  st_union(pedar_polygon(position, c(16:19), "L"),
+                                  pedar_polygon(position, c(23:26), "L"))))
+    med_mf_L <- st_union(pedar_polygon(position, c(27:29), "L"),
+                         st_union(pedar_polygon(position, c(34:36), "L"),
+                                  st_union(pedar_polygon(position, c(41:43), "L"),
+                                           st_union(pedar_polygon(position, c(48:50), "L"),
+                                 pedar_polygon(position, c(55:57), "L")))))
+    lat_mf_L <- st_union(pedar_polygon(position, c(30:33), "L"),
+                         st_union(pedar_polygon(position, c(37:40), "L"),
+                                  st_union(pedar_polygon(position, c(44:47), "L"),
+                                           st_union(pedar_polygon(position, c(51:54), "L"),
+                                 pedar_polygon(position, c(58:59), "L")))))
+    MTPJ1_L<- st_union(pedar_polygon(position, c(62:63), "L"),
+                       st_union(pedar_polygon(position, c(69:70), "L"),
+                     pedar_polygon(position, c(76:77), "L")))
+    MTPJ23_L<- st_union(pedar_polygon(position, c(64:66), "L"),
+                        st_union(pedar_polygon(position, c(71:73), "L"),
+                     pedar_polygon(position, c(78:80), "L")))
+    MTPJ45_L<- st_union(pedar_polygon(position, c(60:61), "L"),
+                        st_union(pedar_polygon(position, c(67:68), "L"),
+                        pedar_polygon(position, c(74:75), "L")))
+    hallux_L<- st_union(pedar_polygon(position, c(83:84), "L"),
+                        st_union(pedar_polygon(position, c(90:91), "L"),
+                        pedar_polygon(position, c(96), "L")))
+    lesser_toes_L <- st_union(pedar_polygon(position, c(81:82), "L"),
+                              st_union(pedar_polygon(position, c(85:89), "L"),
+                                       st_union(pedar_polygon(position, c(92:95), "L"),
+                              pedar_polygon(position, c(97:99), "L"))))
 
+
+    med_rf_R <- st_union(pedar_polygon(position, c(1:2), "R"),
+                         st_union(pedar_polygon(position, c(6:8), "R"),
+                                  st_union(pedar_polygon(position, c(13:15), "R"),
+                                           pedar_polygon(position, c(20:22), "R"))))
+    lat_rf_R <- st_union(pedar_polygon(position, c(3:5), "R"),
+                         st_union(pedar_polygon(position, c(9:12), "R"),
+                                  st_union(pedar_polygon(position, c(16:19), "R"),
+                                           pedar_polygon(position, c(23:26), "R"))))
+    med_mf_R <- st_union(pedar_polygon(position, c(27:29), "R"),
+                         st_union(pedar_polygon(position, c(34:36), "R"),
+                                  st_union(pedar_polygon(position, c(41:43), "R"),
+                                           st_union(pedar_polygon(position, c(48:50), "R"),
+                                                    pedar_polygon(position, c(55:57), "R")))))
+    lat_mf_R <- st_union(pedar_polygon(position, c(30:33), "R"),
+                         st_union(pedar_polygon(position, c(37:40), "R"),
+                                  st_union(pedar_polygon(position, c(44:47), "R"),
+                                           st_union(pedar_polygon(position, c(51:54), "R"),
+                                                    pedar_polygon(position, c(58:59), "R")))))
+    MTPJ1_R<- st_union(pedar_polygon(position, c(62:63), "R"),
+                       st_union(pedar_polygon(position, c(69:70), "R"),
+                                pedar_polygon(position, c(76:77), "R")))
+    MTPJ23_R<- st_union(pedar_polygon(position, c(64:66), "R"),
+                        st_union(pedar_polygon(position, c(71:73), "R"),
+                                 pedar_polygon(position, c(78:80), "R")))
+    MTPJ45_R<- st_union(pedar_polygon(position, c(60:61), "R"),
+                        st_union(pedar_polygon(position, c(67:68), "R"),
+                                 pedar_polygon(position, c(74:75), "R")))
+    hallux_R<- st_union(pedar_polygon(position, c(83:84), "R"),
+                        st_union(pedar_polygon(position, c(90:91), "R"),
+                                 pedar_polygon(position, c(96), "R")))
+    lesser_toes_R <- st_union(pedar_polygon(position, c(81:82), "R"),
+                              st_union(pedar_polygon(position, c(85:89), "R"),
+                                       st_union(pedar_polygon(position, c(92:95), "R"),
+                                                pedar_polygon(position, c(97:99), "R"))))
+    mask_list <- list(L_medial_rearfoot_mask = med_rf_L,
+                      L_lateral_rearfoot_mask = lat_rf_L,
+                      L_medial_midfoot_mask = med_mf_L,
+                      L_lateral_midfoot_mask = lat_mf_L,
+                      L_MTPJ1_mask = MTPJ1_L,
+                      L_MTPJ23_mask = MTPJ23_L,
+                      L_MTPJ45_mask = MTPJ45_L,
+                      L_hallux_mask = hallux_L,
+                      L_lesser_toes_mask = lesser_toes_L,
+                      R_medial_rearfoot_mask = med_rf_R,
+                      R_lateral_rearfoot_mask = lat_rf_R,
+                      R_medial_midfoot_mask = med_mf_R,
+                      R_lateral_midfoot_mask = lat_mf_R,
+                      R_MTPJ1_mask = MTPJ1_R,
+                      R_MTPJ23_mask = MTPJ23_R,
+                      R_MTPJ45_mask = MTPJ45_R,
+                      R_hallux_mask = hallux_R,
+                      R_lesser_toes_mask = lesser_toes_R)
+
+    pressure_data[[5]] <- mask_list
   }else{
     stop("Please select an existing mask.")
   }
@@ -2879,7 +3036,7 @@ plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[
   # plot original mask data
   for (n_mask in visual_list) {
     g <-
-      g + geom_path(data = data.frame(st_coordinates(pressure_data[[5]][[n_mask]])[,1:2]), aes(X, Y), color = "red")
+      g + geom_path(data = data.frame(st_coordinates(pressure_data[[5]][[n_mask]])[,1:2]), aes(X, Y), color = "red", linewidth = 1)
   }
   print(g)
 
@@ -2913,22 +3070,44 @@ pedar_polygon <- function(position, sensel_list, foot_side){
   fp_chull <- st_convex_hull(st_union(df_sf))
 
   # sensel 48 is slanted, so this will account for it in the mask
-  if(length(which(sensel_list %in% 48)) > 0){
-    mask_y <- min(sens_coords$y_coord)
-    if(foot_side == "L"){
-      tri_coord <- subset(position[1:(99*4),], id %in% 48)
-      mask_x <- max(subset(coord, y %in% min_y)[,2])
-    }else if(foot_side == "R"){
-      coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
-      tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  48)
-      mask_x <- min(subset(coord, y %in% min_y)[,2])
+  if(length(which(sensel_list %in% 48)) > 0 ){
+    if(length(which(sensel_list %in% c(27,61))) == 2){
+
+     tri_coords <- data.frame(x_coord= double(), y_coord = double())
+     if(foot_side == "L"){
+       edge_sensels <- c(6,13,20,27,34,41,48,55,62,69)
+       tri_coord <- subset(position[1:(99*4),], id %in% edge_sensels)
+       tri_coords <- tri_coord[(seq(1,nrow(tri_coord/4), by = 4)+1),2:3]
+       tri_coords[nrow(tri_coords)+1,] <- tri_coord[2,2:3]
+     }else if(foot_side == "R"){
+       edge_sensels <- c(13,20,27,34,41,48,55,62,69,76)
+       tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  edge_sensels)
+       tri_coords <- tri_coord[(seq(1,nrow(tri_coord/4), by = 4)+2),2:3]
+       tri_coords[nrow(tri_coords)+1,] <- tri_coord[3,2:3]
+     }
+    }else{
+      mask_y_low <- min(sens_coords$y_coord)
+      mask_y_high <- max(sens_coords$y_coord)
+      if(foot_side == "L"){
+        tri_coord <- subset(position[1:(99*4),], id %in% 48)
+        mask_x_low <- max(subset(coord, y %in% mask_y_low)[,2])
+        mask_x_high <- max(subset(coord, y %in% mask_y_high)[,2])
+      }else if(foot_side == "R"){
+        coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
+        tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  48)
+        mask_x_low <- min(subset(coord, y %in% mask_y_low)[,2])
+        mask_x_high <- min(subset(coord, y %in% mask_y_high)[,2])
+      }
+      tri_coords <- data.frame(x_coord= double(), y_coord = double())
+      tri_coords[1,] <- c(mask_x_high, mask_y_high)
+      tri_coords[2,] <- tri_coord[3,2:3]
+      tri_coords[3,] <- c(mask_x_low, mask_y_low)
+      tri_coords[4,] <- c(mask_x_high, mask_y_high)
     }
-    tri_coords <- data.frame(x_coord= double(), y_coord = double())
-    tri_coords[1:2,] <- tri_coord[c(2,3),2:3]
-    tri_coords[3,] <-c(mask_x, mask_y)
-    tri_coords[4,] <- tri_coord[2,2:3]
-    tri_sf <-  st_polygon(list(as.matrix(tri_coords)))
-    fp_chull <- st_difference(fp_chull, tri_sf)
+
+      tri_sf <-  st_polygon(list(as.matrix(tri_coords)))
+      fp_chull <- st_difference(fp_chull, tri_sf)
+
   }
 
   return(fp_chull)
