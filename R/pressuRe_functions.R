@@ -8,6 +8,7 @@
 # check/make pedar work for a lot of these functions
 # automask2: toe line modifications
 # fscan processing needs to be checked (work with NA?)
+# in edit_mask, make edit_list a vector that works with numbers or names?
 
 # to do (future)
 # global pressure_import function (leave for V2)
@@ -1386,7 +1387,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @param n_masks Numeric. Number of masks to add
 #' @param threshold Numeric. Distance between adjacent mask vertices before
 #' sharing vertex coordinates
-#' @param exisiting_mask Logical. Show exisiting masks
+#' @param plot_existing_mask Logical. Show exisiting masks
 #' @param preview Logical. Show new maks on pressure image
 #' @return List New mask is added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
@@ -1404,8 +1405,8 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @export
 
 create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
-                        threshold = 0.005, exisiting_mask = TRUE, image = "max",
-                        preview = TRUE) {
+                        threshold = 0.005, plot_existing_mask = TRUE,
+                        image = "max", preview = TRUE) {
   # global variables
   x <- y <- NULL
 
@@ -1414,11 +1415,11 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
     stop("user needs to select mask vertices")
 
   # plot existing masks or just footprint
-  if(exisiting_mask == TRUE){
-    if(length(pressure_data[[5]]) > 0){
+  if (exisiting_mask == TRUE){
+    if (length(pressure_data[[5]]) > 0){
     g <- plot_masks(pressure_data)
     }
-  }else{
+  } else {
     grDevices::x11()
     g <- plot_pressure(pressure_data, image, plot = FALSE)
     g <- g + scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.15))
@@ -1426,8 +1427,8 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
     print(g)
   }
 
+  # empty data frame to store vertex coordinates
   mask_vertices <- data.frame(x = double(), y = double())
-
 
   for(mask_n in 1:n_masks){
     # interactively select area
@@ -1436,18 +1437,19 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
     valid_mask <- which(dist(mask) < threshold)
 
     while(length(valid_mask) > 0){
-      message("Some vertices are closer than your designated threshold. Reselect mask corners.")
+      message("Some vertices are closer than your designated threshold.
+              Reselect mask corners")
       mask <- gglocator(n_verts)
       valid_mask <- which(dist(mask) < threshold)
     }
 
     # allow closely selected mask vertices to share a vertex
-    mask_vertices[(nrow(mask_vertices)+1):(nrow(mask_vertices)+n_verts),] <-
-      mask
-
+    mask_vertices[(nrow(mask_vertices) + 1):
+                    (nrow(mask_vertices) + n_verts), ] <- mask
     if (mask_n > 1) {
       v_distance <- as.matrix(dist(mask_vertices))
-      close_v <- which((v_distance < threshold) & (v_distance > 0), arr.ind = TRUE)
+      close_v <- which((v_distance < threshold) & (v_distance > 0),
+                       arr.ind = TRUE)
       for (change_v in 1:nrow(close_v) / 2) {
         mask[close_v[change_v, 1] - ((mask_n - 1) * n_verts), 1] <-
           mask_vertices[close_v[change_v, 2], 1]
@@ -1455,7 +1457,6 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
           mask_vertices[close_v[change_v, 2], 2]
         mask_vertices[close_v[change_v, 1], ] <-
           mask_vertices[close_v[change_v, 2], ]
-
       }
     }
 
@@ -1526,15 +1527,16 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 
     for (n_mask in edit_list) {
       mask_vertices <- data.frame(st_coordinates(mask_org[[n_mask]])[,1:2])
-      mask_vertices_edit[(nrow(mask_vertices_edit)+ 1):(nrow(mask_vertices)+ nrow(mask_vertices_edit)), ] <- mask_vertices
+      mask_vertices_edit[(nrow(mask_vertices_edit) + 1):
+                           (nrow(mask_vertices) + nrow(mask_vertices_edit)), ] <- mask_vertices
     }
 
     # select point near edit vertex and select new value
-    color_v <- rainbow(n_edit+1)
-    for(edit in seq(1,n_edit)){
+    color_v <- rainbow(n_edit + 1)
+    for (edit in seq(1, n_edit)){
       message("Select mask vertex to edit, then it's new location")
       mask <- gglocator(2)
-      mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1,]
+      mask_vertices_edit[nrow(mask_vertices_edit) + 1, ] <- mask[1, ]
       edit_distance <- as.matrix(dist(mask_vertices_edit))
       close_v <-
         which((edit_distance[nrow(mask_vertices_edit),] < threshold) &
@@ -1551,35 +1553,32 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
       }
 
       for (n_mask in edit_list) {
-        mask_vertices <- data.frame(st_coordinates(mask_org[[n_mask]])[,1:2])
+        mask_vertices <- data.frame(st_coordinates(mask_org[[n_mask]])[, 1:2])
         new_mask_v <- mask_vertices
-        mask_vertices[nrow(mask_vertices)+1,] <- mask[1,]
+        mask_vertices[nrow(mask_vertices) + 1, ] <- mask[1, ]
         v_distance <- as.matrix(dist(mask_vertices))
         v_distance[upper.tri(v_distance)] <- 0.0
-        close_selected <-  which((v_distance[nrow(mask_vertices),] < threshold)
-                                 & (v_distance[nrow(mask_vertices),] > 0), arr.ind = TRUE)
+        close_selected <- which((v_distance[nrow(mask_vertices), ] < threshold)
+                                 & (v_distance[nrow(mask_vertices), ] > 0),
+                                arr.ind = TRUE)
 
-        if(length(close_selected) > 0){
+        if (length(close_selected) > 0){
           message(n_mask, ":", close_selected)
 
           if(close_selected[1] == 1){
-            new_mask_v[c(1, nrow(new_mask_v)),] <- mask[2,]
-            close_selected <- head(close_selected[-1],-1)
+            new_mask_v[c(1, nrow(new_mask_v)), ] <- mask[2, ]
+            close_selected <- head(close_selected[-1], -1)
           }
           if(length(close_selected) > 0){
-            new_mask_v[close_selected[1],] <- mask[2,]
+            new_mask_v[close_selected[1], ] <- mask[2, ]
             if(length(close_selected) > 1){
-              new_mask_v <- new_mask_v[-tail(close_selected,-1),]
+              new_mask_v <- new_mask_v[-tail(close_selected, -1), ]
             }
-
           }
 
-
-          g <- g + geom_path(data = new_mask_v, aes(X, Y), color = color_v[edit+1])
-
+          g <- g + geom_path(data = new_mask_v, aes(X, Y), color = color_v[edit + 1])
           mask_org[[n_mask]] <-
             st_polygon(list(as.matrix(new_mask_v)))
-
         }
       }
 
@@ -1589,12 +1588,10 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
     # return pressure frames for selected area
     pressure_data[[5]] <- mask_org
     return(pressure_data)
-  }else{
+  } else {
     message("You must edit at least one vertex, change the value for 'n_edit'")
   }
-
 }
-
 
 
 # =============================================================================
@@ -1647,7 +1644,7 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
 
   # make ids
   ids <- c()
-  for (i in 1:99) {ids = append(ids,  i)} #left
+  for (i in 1:99) {ids = append(ids, i)} #left
   for (i in 1:99) {ids = append(ids, i)} #right
 
   position <- data.frame(id = rep(ids, each = 4), x = xs, y = ys)
