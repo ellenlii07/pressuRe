@@ -1,6 +1,5 @@
 # to do (current version)
 # CPEI manual edit to be built into function
-# more automasking schemes (pedar especially)
 # Do we have all pedar insoles? Double check areas
 # add support for pliance
 # edit mask needs to be written
@@ -173,7 +172,7 @@ load_emed <- function(pressure_filepath) {
 #'   \item pressure_array. 3D array covering each timepoint of the measurement.
 #'            z dimension represents time
 #'   \item pressure_system. String defining pressure system
-#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item sens_size. String with sensor type
 #'   \item time. Numeric value for time between measurements
 #'   \item masks. List
 #'   \item events. List
@@ -492,7 +491,7 @@ select_steps <- function (pressure_data, threshold_R = 30,
     stop("user needs to select suitable steps")
 
   # check this is pedar (or other suitable) data
-  if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "fscan"))
+  if (!(pressure_data[[2]] == "pedar" || pressure_data[[2]] == "tekscan"))
     stop("data should be from pedar or f-scan")
 
   # make force vectors
