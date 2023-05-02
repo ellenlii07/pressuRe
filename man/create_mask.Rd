@@ -4,7 +4,15 @@
 \alias{create_mask}
 \title{Create mask}
 \usage{
-create_mask(pressure_data, n_verts = 4, image = "max", preview = TRUE)
+create_mask(
+  pressure_data,
+  n_verts = 4,
+  n_masks = 1,
+  threshold = 0.005,
+  plot_existing_mask = TRUE,
+  image = "max",
+  preview = TRUE
+)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
@@ -12,14 +20,22 @@ of the measurement.}
 
 \item{n_verts}{Numeric. Number of vertices in mask}
 
+\item{n_masks}{Numeric. Number of masks to add}
+
+\item{threshold}{Numeric. Distance between adjacent mask vertices before
+sharing vertex coordinates}
+
+\item{plot_existing_mask}{Logical. Show exisiting masks}
+
 \item{image}{String. "max" = footprint of maximum sensors. "mean"
 average value of sensors over time (usually for static analyses)}
 
 \item{preview}{Logical. Show new maks on pressure image}
 }
 \value{
-List New mask is added to the relevant A 3D array covering each timepoint of the measurement for the
-  selected region. z dimension represents time
+List New mask is added to the relevant A 3D array covering each
+timepoint of the measurement for the selected region. z dimension represents
+time
 }
 \description{
 Manually create mask region

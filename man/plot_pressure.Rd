@@ -9,7 +9,7 @@ plot_pressure(
   variable = "max",
   smooth = FALSE,
   frame,
-  step_n,
+  step_n = "max",
   plot_COP = FALSE,
   plot_outline = FALSE,
   plot_colors = "default",

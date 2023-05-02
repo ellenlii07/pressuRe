@@ -1419,8 +1419,8 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
     stop("user needs to select mask vertices")
 
   # plot existing masks or just footprint
-  if (exisiting_mask == TRUE){
-    if (length(pressure_data[[5]]) > 0){
+  if (plot_existing_mask == TRUE) {
+    if (length(pressure_data[[5]]) > 0) {
     g <- plot_masks(pressure_data)
     }
   } else {
@@ -1512,6 +1512,7 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
 #' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' edit_mask(pressure_data)
 #' }
+#' @importFrom grDevices rainbow
 #' @export
 
 edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
@@ -1520,6 +1521,9 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
   if (interactive() == FALSE) {
     stop("user needs to select mask vertices")
   }
+
+  # global variables
+  X <- Y <- NULL
 
   if(n_edit > 0){
     # plot original mask data
@@ -1613,7 +1617,7 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' "mask3" splits the foot into 9 regions using sensel boundaries:
 #'  medial rearfoot, lateral rearfoot, medial midfoot, lateral midfoot, MTPJ1,
 #'  MTPJ2-3, MTPJ4-5, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-20
-#' @param plot. Logical. Plot masks if TRUE
+#' @param plot Logical. Plot masks if TRUE
 #' @return List. Masks are added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
 #' time
@@ -1630,7 +1634,7 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
   pedar_insole_grid <- x <- y <- id <- NULL
 
   # check this is pedar (or other suitable) data
-  if (!(pressure_data[[2]] == "pedar"))
+  if (pressure_data[[2]] != "pedar")
     stop("data should be from pedar")
 
   # load pedar coords
@@ -1676,7 +1680,7 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
 
       pressure_data[[5]] <- mask_list
 
-  }else if(mask_type == "mask2"){
+  } else if (mask_type == "mask2"){
     bbox_L <- sf::st_bbox(pedar_polygon(position, 1:99, "L"))
     outline_mask <- pedar_polygon(position, 1:99, "L")
 
@@ -1745,7 +1749,7 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
                       R_lesser_toes_mask = lesser_toes_R)
 
     pressure_data[[5]] <- mask_list
-  }else if(mask_type == "mask3"){
+  } else if (mask_type == "mask3"){
     med_rf_L <- st_union(pedar_polygon(position, c(1:2), "L"),
                          st_union(pedar_polygon(position, c(6:8), "L"),
                          st_union(pedar_polygon(position, c(13:15), "L"),
@@ -1836,13 +1840,16 @@ pedar_mask <- function(pressure_data, mask_type, plot = TRUE) {
                       R_lesser_toes_mask = lesser_toes_R)
 
     pressure_data[[5]] <- mask_list
-  }else{
+  } else {
     stop("Please select an existing mask.")
   }
 
-  if(plot == TRUE){
+  # plot
+  if (plot == TRUE) {
     plot_masks(pressure_data)
   }
+
+  # return
   return(pressure_data)
 }
 
@@ -2062,7 +2069,6 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param masks List. Masks used to define the regions to be analysed
 #' @param partial_sensors Logical Defines how sensors that do not
 #'   lie wholly within mask are dealt with. If FALSE, they will be excluded;
 #'   if TRUE, for relevant variables their contribution will be weighted by the
@@ -2079,17 +2085,20 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' masks <- automask(pressure_data)
-#' mask_analysis(pressure_data, masks, TRUE, variable = "force_ts")
+#' pressure_data <- automask(pressure_data)
+#' mask_analysis(pressure_data, TRUE, variable = "force_ts")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
 
-mask_analysis <- function(pressure_data, masks, partial_sensors = FALSE,
+mask_analysis <- function(pressure_data, partial_sensors = FALSE,
                           variable = "press_peak_sensor",
                           pressure_units = "kPa", area_units = "cm2") {
   # set global variables
   sens_poly <- act_sens <- area <- max_df <- overlap_list <- NULL
+
+  # masks
+  masks <- pressure_data[[5]]
 
   # set up mask/sensor areas
   ## sensor area
@@ -3026,9 +3035,11 @@ rot_line <- function(line, ang, cnt) {
 #' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
 #' plot_masks(pressure_data)
 #' }
-#' @export
+#' @noRd
 
 plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[[5]]))){
+  # global variables
+  X <- Y <- NULL
 
   # plot footprint
   grDevices::x11()
@@ -3055,21 +3066,23 @@ plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[
 #' @param position Dataframe. A n x 3 dataframe of sensel coordinates
 #' [sensel id, x,y]
 #' @param sensel_list List. List of sensels to include
-#' @param foot_side String. "L" for left foot, "R" for right foot
+#' @param foot_side String. "LEFT" for left foot, "RIGHT" for right foot
 #' @return polygon. A mask polygon
-#' @export
+#' @noRd
 
 pedar_polygon <- function(position, sensel_list, foot_side){
+  # global variables
+  y <- id <- NULL
 
   # mask value based on insole side
-  if(foot_side == "L"){
-    coord <- subset(position[1:(99*4),], id %in% sensel_list)
-  }else if(foot_side == "R"){
-    coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
+  if(foot_side == "LEFT"){
+    coord <- subset(position[1:(99 * 4), ], id %in% sensel_list)
+  } else if (foot_side == "RIGHT"){
+    coord <- subset(position[(99 * 4 + 1):nrow(position), ], id %in% sensel_list)
   }
 
   # mask from convex hull of sensel vertices
-  sens_coords<-data.frame(x_coord= double(), y_coord = double())
+  sens_coords<-data.frame(x_coord = double(), y_coord = double())
   sens_coords[1:(length(sensel_list)*4),] <- coord[,2:3]
   df_sf <- sens_coords %>%
     st_as_sf(coords = c( "x_coord", "y_coord" ))
@@ -3090,31 +3103,31 @@ pedar_polygon <- function(position, sensel_list, foot_side){
        tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  edge_sensels)
        tri_coords <- tri_coord[(seq(1,nrow(tri_coord/4), by = 4)+2),2:3]
        tri_coords[nrow(tri_coords)+1,] <- tri_coord[3,2:3]
-     }
-    }else{
+      }
+    } else {
       mask_y_low <- min(sens_coords$y_coord)
       mask_y_high <- max(sens_coords$y_coord)
-      if(foot_side == "L"){
+      if (foot_side == "LEFT"){
         tri_coord <- subset(position[1:(99*4),], id %in% 48)
         mask_x_low <- max(subset(coord, y %in% mask_y_low)[,2])
         mask_x_high <- max(subset(coord, y %in% mask_y_high)[,2])
-      }else if(foot_side == "R"){
+      } else if (foot_side == "RIGHT"){
         coord <- subset(position[(99*4 + 1):nrow(position),], id %in% sensel_list)
         tri_coord <- subset(position[(99*4 + 1):nrow(position),], id %in%  48)
         mask_x_low <- min(subset(coord, y %in% mask_y_low)[,2])
         mask_x_high <- min(subset(coord, y %in% mask_y_high)[,2])
       }
-      tri_coords <- data.frame(x_coord= double(), y_coord = double())
+      tri_coords <- data.frame(x_coord = double(), y_coord = double())
       tri_coords[1,] <- c(mask_x_high, mask_y_high)
-      tri_coords[2,] <- tri_coord[3,2:3]
+      tri_coords[2,] <- tri_coord[3, 2:3]
       tri_coords[3,] <- c(mask_x_low, mask_y_low)
       tri_coords[4,] <- c(mask_x_high, mask_y_high)
     }
 
       tri_sf <-  st_polygon(list(as.matrix(tri_coords)))
       fp_chull <- st_difference(fp_chull, tri_sf)
-
   }
 
+  # return
   return(fp_chull)
 }
