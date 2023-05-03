@@ -8,6 +8,8 @@ create_mask(
   pressure_data,
   n_verts = 4,
   n_masks = 1,
+  threshold = 0.005,
+  plot_existing_mask = TRUE,
   image = "max",
   preview = TRUE
 )
@@ -19,6 +21,11 @@ of the measurement.}
 \item{n_verts}{Numeric. Number of vertices in mask}
 
 \item{n_masks}{Numeric. Number of masks to add}
+
+\item{threshold}{Numeric. Distance between adjacent mask vertices before
+sharing vertex coordinates}
+
+\item{plot_existing_mask}{Logical. Show exisiting masks}
 
 \item{image}{String. "max" = footprint of maximum sensors. "mean"
 average value of sensors over time (usually for static analyses)}

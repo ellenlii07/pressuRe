@@ -4,19 +4,35 @@
 \alias{edit_mask}
 \title{Edit mask}
 \usage{
-edit_mask(pressure_data, n_edit)
+edit_mask(
+  pressure_data,
+  n_edit,
+  threshold = 0.002,
+  edit_list = seq(1, length(pressure_data[[5]]))
+)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
 
 \item{n_edit}{Numeric. Number of vertices to edit}
+
+\item{threshold}{Numeric. Distance between point clicked and vertex that is
+selected (smaller thresholds are recommended when editing automasks becasue
+they contain more vertices in the polygon)}
+
+\item{edit_list}{List. Mask numbers that want to be edited. (Default is to
+load all masks so that adjacent masks with shared coordinates are modified
+together)}
 }
 \value{
-List.
+List. Edited mask is added to the relevant A 3D array covering each
+timepoint of the measurement for the selected region. z dimension represents
+time
 }
 \description{
-Manually edit mask
+Manually edit mask, also simplifies automask vertices to the
+threshold value
 }
 \examples{
 \dontrun{
