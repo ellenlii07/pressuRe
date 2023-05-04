@@ -954,6 +954,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' colors at
 #' @param break_colors Vector. If plot_colors is "custom", colors to use.
 #' Should be one shorter than break_values
+#' @param sensor_oultine Logical. Sensor outline to be shown
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @param legend Logical. If TRUE, legend will be added to plot
 #' @return ggplot plot object
@@ -972,7 +973,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame,
                           step_n = "max", plot_COP = FALSE, plot_outline = FALSE,
                           plot_colors = "default", break_values, break_colors,
-                          plot = TRUE, legend = TRUE) {
+                          sensor_outline = TRUE, plot = TRUE, legend = TRUE) {
   # set global variables
   x <- y <- id <- cols <- x_coord <- y_coord <- value <- NULL
 
@@ -1032,7 +1033,15 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # plot
   g <- ggplot()
-  g <- g + geom_polygon(data = cor, aes(x = x, y = y, group = id, fill = value))
+  if (sensor_outline == TRUE) {
+    g <- g + geom_polygon(data = cor,
+                          aes(x = x, y = y, group = id, fill = value),
+                          color = "black")
+  } else {
+    g <- g + geom_polygon(data = cor,
+                          aes(x = x, y = y, group = id, fill = value))
+  }
+
   g <- g + binned_scale("fill", "foo",
                         binned_pal(manual_pal(break_colors)),
                         guide = "coloursteps", breaks = break_values,
