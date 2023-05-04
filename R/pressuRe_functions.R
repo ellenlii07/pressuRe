@@ -1084,56 +1084,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 # =============================================================================
 
-#' @title Get outline of pressure region
-#' Determine outline (convex hull) of pressure measurement
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
-#' @param pressure_data List. Includes a 3D array covering each timepoint of the
-#'   measurement. z dimension represents time
-#' @param pressure_image String. "max" = footprint of maximum sensors. "frame"
-#' = an individual frame
-#' @param frame Integer. Frame number to use
-#' @return Polygon. sfg object representing convex hull outline
-#' @examples
-#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
-#' pressure_data <- load_emed(emed_data)
-#' pressure_outline(pressure_data)
-#' pressure_outline(pressure_data, frame = 50)
-#' @importFrom magrittr "%>%"
-#' @importFrom sf st_as_sf st_convex_hull st_combine st_buffer
-#' @export
-
-pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
-  # check inputs
-  if (is.array(pressure_data[[1]]) == FALSE)
-    stop("pressure data must contain array")
-
-  # check that this is not pedar data
-  if (pressure_data[[2]] == "pedar")
-    stop("data cannot be from pedar")
-
-  # determine active sensor coordinates
-  if (pressure_image == "max") {
-    coords <- sensor_coords(pressure_data, pressure_image = "max")
-  } else {
-    coords <- sensor_coords(pressure_data, "frame", frame)
-  }
-
-  # calculate convex hull
-  sens_coords_df <- coords %>%
-    st_as_sf(coords = c("x_coord", "y_coord"))
-  fp_chull <- st_convex_hull(st_combine(sens_coords_df))
-
-  # add buffer here
-  buffer_size <- pressure_data[[3]][1] / 2
-  fp_chull_buffer <- st_buffer(fp_chull, buffer_size)
-
-  # return convex hull coordinates
-  return(fp_chull_buffer)
-}
-
-
-# =============================================================================
-
 #' @title Animate pressure
 #' @description Produce animation (gif) of pressure distribution
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
@@ -2375,6 +2325,53 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
 # =============================================================================
 
 # helper functions
+
+#' @title Get outline of pressure region
+#' Determine outline (convex hull) of pressure measurement
+#' @author Scott Telfer \email{scott.telfer@gmail.com}
+#' @param pressure_data List. Includes a 3D array covering each timepoint of the
+#'   measurement. z dimension represents time
+#' @param pressure_image String. "max" = footprint of maximum sensors. "frame"
+#' = an individual frame
+#' @param frame Integer. Frame number to use
+#' @return Polygon. sfg object representing convex hull outline
+#' @examples
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' pressure_outline(pressure_data)
+#' pressure_outline(pressure_data, frame = 50)
+#' @importFrom magrittr "%>%"
+#' @importFrom sf st_as_sf st_convex_hull st_combine st_buffer
+#' @noRd
+
+pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
+  # check inputs
+  if (is.array(pressure_data[[1]]) == FALSE)
+    stop("pressure data must contain array")
+
+  # check that this is not pedar data
+  if (pressure_data[[2]] == "pedar")
+    stop("data cannot be from pedar")
+
+  # determine active sensor coordinates
+  if (pressure_image == "max") {
+    coords <- sensor_coords(pressure_data, pressure_image = "max")
+  } else {
+    coords <- sensor_coords(pressure_data, "frame", frame)
+  }
+
+  # calculate convex hull
+  sens_coords_df <- coords %>%
+    st_as_sf(coords = c("x_coord", "y_coord"))
+  fp_chull <- st_convex_hull(st_combine(sens_coords_df))
+
+  # add buffer here
+  buffer_size <- pressure_data[[3]][1] / 2
+  fp_chull_buffer <- st_buffer(fp_chull, buffer_size)
+
+  # return convex hull coordinates
+  return(fp_chull_buffer)
+}
 
 #' interpolation function
 #' @importFrom stats approx
