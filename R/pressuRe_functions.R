@@ -955,7 +955,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' colors at
 #' @param break_colors Vector. If plot_colors is "custom", colors to use.
 #' Should be one shorter than break_values
-#' @param sensor_oultine Logical. Sensor outline to be shown
+#' @param sensor_outline Logical. Sensor outline to be shown
 #' @param plot Logical. If TRUE, plot will be displayed
 #' @param legend Logical. If TRUE, legend will be added to plot
 #' @return ggplot plot object

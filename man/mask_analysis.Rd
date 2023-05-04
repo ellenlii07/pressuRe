@@ -42,7 +42,7 @@ Analyze masked regions of pressure data
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 pressure_data <- automask(pressure_data)
-mask_analysis(pressure_data, TRUE, variable = "press_peak_sensor")
+mask_analysis(pressure_data, FALSE, variable = "press_peak_sensor")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
