@@ -8,7 +8,6 @@
 # DPLI function
 # fix toe side on mask2 pedar mask
 # stop double appearance with custom "pedar_mask
-# plot sensor borders for pedar
 
 
 # to do (future)
@@ -963,7 +962,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
+#' plot_pressure(pressure_data, variable = "mean", plot_COP = FALSE)
 #' plot_pressure(pressure_data, variable = "frame", frame = 20,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
 #'               break_colors = c("blue", "green", "yellow", "red", "pink"))
@@ -2513,7 +2512,8 @@ masks_2_df <- function(masks) {
 #' @noRd
 sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
   # pressure image
-  if (pressure_image == "all_active" | pressure_image == "max") {
+  if (pressure_image == "all_active" | pressure_image == "max" |
+      pressure_image == "mean") {
     sens <- footprint(pressure_data, variable = "max")
   }
   if (pressure_image == "all") {
