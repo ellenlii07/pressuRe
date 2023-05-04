@@ -89,12 +89,14 @@ load_emed <- function(pressure_filepath) {
     breaks <- breaks[1:(min(c(MVP, MPP)) - 1)]
   }
   breaks <- breaks[str_detect(frame_type, "Pict")]
+  breaks <- breaks[!is.na(breaks)]
 
   # get blank lines
   ends <- which(pressure_raw == "\x0C")
 
   # how many frames in each measurement
-  nfs <- sum(str_detect(pressure_raw[breaks + 8], "Pict-No\\.: 1 "))
+  nfs <- sum(str_detect(pressure_raw[breaks + 8], "Pict\\-No\\.\\: 1 "),
+             na.rm = TRUE)
 
   # how many measurements
   n_meas <- floor(length(breaks)/nfs)
