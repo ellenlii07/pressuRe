@@ -1093,7 +1093,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @param fps Numeric. Number of frames per second in animation
 #' @param dpi Numeric. Resolution of gif
 #' @param file_name Name (inlcuding path) of export file
-#' @param preview Logical. Whether to play the animation
 #' @return Animation in gif format
 #' @examples
 #' \dontrun{
@@ -1111,7 +1110,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @export
 
 animate_pressure <- function(pressure_data, plot_colors = "default", fps,
-                             dpi = 96, file_name, preview = FALSE) {
+                             dpi = 96, file_name) {
   # parameter check
   if (str_ends(file_name, ".gif") == FALSE)
     stop("filename must end in .gif")
