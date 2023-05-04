@@ -2158,19 +2158,12 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
   if (variable == "press_peak_sensor") {
     if (length(events) == 0) {
       output_df <- pressure_peak(pressure_data, sens_mask_df,
-                                 output_df = output_df, pressure_units = pressure_units)
+                                 output_df = output_df,
+                                 pressure_units = pressure_units)
     } else if (length(events) > 0) {
-      output_df <- pressure_peak(pressure_data, sens_mask_df, events, mask_sides,
+      output_df <- pressure_peak(pressure_data, sens_mask_df, mask_sides,
                                  output_df, pressure_units)
     }
-
-    #P <- c(footprint(pressure_data))
-    #P <- P[act_sens]
-    #for (mask in seq_along(masks)) {
-    #  output_mat[, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
-    #}
-    #if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
-    #if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for maximum value of any sensor for each measurement frame
@@ -2189,16 +2182,24 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
   # Analyse regions for peak regional pressure (defined as the pressure
   # averaged over the mask)
   if (variable == "press_peak_mask") {
-    P <- c(footprint(pressure_data))
-    P <- P[act_sens] * sensor_area * 1000
-    CA <- rep(sensor_area, length.out = length(P))
-    for (mask in seq_along(masks)) {
-      force <- sum(P * sens_mask_df[, mask])
-      contact_area <- sum(CA * sens_mask_df[, mask])
-      output_mat[, mask] <- force / contact_area / 1000
+    if (length(events) == 0) {
+      output_df <- pressure_mean(pressure_data, sens_mask_df,
+                                 output_df = output_df,
+                                 pressure_units = pressure_units)
+    } else if (length(events) > 0) {
+      output_df <- pressure_mean(pressure_data, sens_mask_df, mask_sides,
+                                 output_df, pressure_units)
     }
-    if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
-    if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
+  #  P <- c(footprint(pressure_data))
+  #  P <- P[act_sens] * sensor_area * 1000
+  #  CA <- rep(sensor_area, length.out = length(P))
+  #  for (mask in seq_along(masks)) {
+  #    force <- sum(P * sens_mask_df[, mask])
+  #    contact_area <- sum(CA * sens_mask_df[, mask])
+  #    output_mat[, mask] <- force / contact_area / 1000
+  #  }
+  #  if (pressure_units == "MPa") {output_mat <- output_mat * 0.001}
+  #  if (pressure_units == "Ncm2") {output_mat <- output_mat * 0.1}
   }
 
   # Analyse regions for peak mask pressure (defined as the maximum mean pressure
@@ -3163,25 +3164,10 @@ pedar_polygon <- function(pressure_data, sensel_list, foot_side){
 }
 
 
-#' @title event analysis
-#' @description Analyses pressure data by events
-#' @param pressure_data List. First item is a 3D array covering each timepoint
-#' of the measurement.
-#' @noRd
-
-event_analysis <- function(pressure_data) {
-  # check events exist
-  if (length(pressure_data[[6]]) == 0)
-    stop("no events associated with file")
-
-  # make
-
-}
-
 #' @title Peak pressure
 #' @description get highest value of sensor in mask
 #' @noRd
-pressure_peak <- function(pressure_data, sens_mask_df, events = NULL,
+pressure_peak <- function(pressure_data, sens_mask_df,
                           mask_sides = NULL, output_df, pressure_units) {
   # global variables
   act_sens <- masks <- NULL
@@ -3192,6 +3178,7 @@ pressure_peak <- function(pressure_data, sens_mask_df, events = NULL,
   # single step data
   if (pressure_data[[2]] != "pedar" & length(events) == 0) {
     P <- c(footprint(pressure_data))
+    act_sens <- which(footprint(pressure_data, "max") > 0)
     P <- P[act_sens]
     for (mask in seq_along(pressure_data[[5]])) {
       output_df[, mask] <- max(P[which(sens_mask_df[, mask] > 0)])
@@ -3219,6 +3206,103 @@ pressure_peak <- function(pressure_data, sens_mask_df, events = NULL,
             output_df[cycle, L_masks[mask] + 2] <- max(P[which(sens_mask_df[, L_masks[mask]] > 0)])
           }
           output_df[cycle, 1] <- "LEFT"
+        }
+      }
+    } else {
+      for (cycle in 1:nrow(events)) {
+        output_df[cycle, 2] <- cycle
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle, 2:3]))]
+        P <- c(footprint(pressure_data_))
+        for (mask in seq_along(pressure_data[[5]])) {
+          output_df[cycle, mask + 2] <- max(P[which(sens_mask_df[, mask] > 0)])
+        }
+      }
+    }
+  }
+
+  # adjust units
+  if (ncol(output_df) == length(masks)) {nc <- c(1:length(masks))} else {
+    nc <- c(ncol(output_df) - length(masks), ncol(output_df))
+  }
+  if (pressure_units == "MPa") {output_df[, ] <- output_df[, nc] * 0.001}
+  if (pressure_units == "Ncm2") {output_df[, ] <- output_df[, nc] * 0.1}
+
+  # return
+  return(output_df)
+}
+
+
+#' @title Mean regional pressure
+#' @description get average pressure across mask
+#' @noRd
+pressure_mean <- function(pressure_data, sens_mask_df, mask_sides = NULL,
+                          output_df, pressure_units) {
+  # global variables
+  act_sens <- masks <- NULL
+
+  # events df
+  events <- pressure_data[[6]]
+
+  # single step data
+  if (pressure_data[[2]] != "pedar" & length(events) == 0) {
+    sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+    P <- c(footprint(pressure_data))
+    act_sens <- which(footprint(pressure_data, "max") > 0)
+    P <- P[act_sens] * sensor_area * 1000
+    CA <- rep(sensor_area, length.out = length(P))
+    for (mask in seq_along(pressure_data[[5]])) {
+      force <- sum(P * sens_mask_df[, mask])
+      contact_area <- sum(CA * sens_mask_df[, mask])
+      output_df[, mask] <- force / contact_area / 1000
+    }
+  }
+
+  # multi step/cycle data
+  if (length(events) > 0) {
+    if (pressure_data[[2]] == "pedar") {
+      R_masks <- which(mask_sides == "RIGHT")
+      L_masks <- which(mask_sides == "LEFT")
+      pedar_insole_areas <- pedar_insole_area()
+      pedarSensorAreas <- as.vector(pedar_insole_areas[[pressure_data[[3]]]] *
+                                      0.001)
+      pedarSensorAreas <- c(pedarSensorAreas, pedarSensorAreas)
+      for (cycle in 1:nrow(events)) {
+        output_df[cycle, 2] <- cycle
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle, 2:3]))]
+        P <- c(footprint(pressure_data_)) * pedarSensorAreas
+        if (events[cycle, 1] == "RIGHT") {
+          for (mask in seq_along(R_masks)) {
+            force <- sum(P * sens_mask_df[, mask])
+            contact_area <- sum(pedarSensorAreas * sens_mask_df[, mask])
+            output_df[cycle, R_masks[mask] + 2] <- force / contact_area / 1000
+          }
+          output_df[cycle, 1] <- "RIGHT"
+        }
+        if (events[cycle, 1] == "LEFT") {
+          for (mask in seq_along(L_masks)) {
+            force <- sum(P * sens_mask_df[, mask])
+            contact_area <- sum(pedarSensorAreas * sens_mask_df[, mask])
+            output_df[cycle, R_masks[mask] + 2] <- force / contact_area / 1000
+          }
+          output_df[cycle, 1] <- "LEFT"
+        }
+      }
+    } else {
+      for (cycle in 1:nrow(events)) {
+        sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+        output_df[cycle, 2] <- cycle
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle, 2:3]))]
+        P <- c(footprint(pressure_data_))
+        act_sens <- which(footprint(pressure_data, "max") > 0)
+        P <- P[act_sens] * sensor_area * 1000
+        CA <- rep(sensor_area, length.out = length(P))
+        for (mask in seq_along(pressure_data[[5]])) {
+          force <- sum(P * sens_mask_df[, mask])
+          contact_area <- sum(CA * sens_mask_df[, mask])
+          output_df[cycle, mask + 2] <- force / contact_area / 1000
         }
       }
     }
