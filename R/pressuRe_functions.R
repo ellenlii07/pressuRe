@@ -2096,7 +2096,7 @@ dpli <- function(pressure_data) {
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- automask(pressure_data)
-#' mask_analysis(pressure_data, FALSE, variable = "contact_area_peak")
+#' mask_analysis(pressure_data, FALSE, variable = "pti_1")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
@@ -2252,18 +2252,20 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
 
   # Analyse regions for pressure time integral (Novel definition)
   if (variable == "pti_1") {
-    for (mask in seq_along(masks)) {
-      mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
-      for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- c(pressure_data[[1]][, , i])
-        P <- P[act_sens]
-        mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
-          pressure_data[[4]] * 1000
-      }
-      output_mat[, mask] <- sum(mask_pp)
-    }
-    if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
-    if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
+    output_df <- pti_1(pressure_data, sens_mask_df, mask_sides,
+                       output_df, pressure_units)
+    #for (mask in seq_along(masks)) {
+    #  mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+    #  for (i in 1:(dim(pressure_data[[1]])[3])) {
+    #    P <- c(pressure_data[[1]][, , i])
+    #    P <- P[act_sens]
+    #    mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
+    #      pressure_data[[4]] * 1000
+    #  }
+    #  output_mat[, mask] <- sum(mask_pp)
+    #}
+    #if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
+    #if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
   }
 
   # Analyse regions for pressure time integral (Melai definition)
@@ -3343,6 +3345,7 @@ pressure_mean <- function(pressure_data, sens_mask_df, mask_sides,
 
 #' @title Contact area by mask
 #' @description get contact areas for masks
+#' @noRd
 contact_area <- function(pressure_data, sens_mask_df, mask_sides,
                          output_df, area_units) {
   # global variables
@@ -3418,6 +3421,98 @@ contact_area <- function(pressure_data, sens_mask_df, mask_sides,
   # return
   return(output_df)
 }
+
+#' @title Pressure time integral (Novel)
+#' @description calculate PTI (as defined by novel) for pressure data
+#' @noRd
+
+pti_1 <- function(pressure_data, sens_mask_df, mask_sides,
+                  output_df, pressure_units) {
+  # global variables
+  act_sens <- masks <- NULL
+
+  # events df
+  events <- pressure_data[[6]]
+
+  # output_names
+  col_names <- colnames(output_df)
+
+  # pressure variable
+  pv <- "pti_novel"
+
+  # single step data
+  if (pressure_data[[2]] != "pedar" & length(events) == 0) {
+    act_sens <- which(footprint(pressure_data, "max") > 0)
+    for (mask in seq_along(pressure_data[[5]])) {
+      mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens]
+        mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
+          pressure_data[[4]]
+      }
+      mn <- names(pressure_data[[5]])[mask]
+      val <- sum(mask_pp)
+      output_df <- rbind(output_df, c(pv, mn, val))
+    }
+  }
+
+  # multi step/cycle data
+  if (length(events) > 0) {
+    if (pressure_data[[2]] == "pedar") {
+      for (cycle_n in 1:nrow(events)) {
+        cyc <- cycle_n
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        for (mask in seq_along(pressure_data[[5]])) {
+          mask_pp <- rep(NA, length.out = dim(pressure_data_[[1]])[3])
+          for (i in 1:(dim(pressure_data_[[1]])[3])) {
+            P <- c(pressure_data_[[1]][, , i])
+            mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
+              pressure_data[[4]]
+          }
+          mn <- names(pressure_data[[5]])[mask]
+          side <- mask_sides[mask]
+          val <- sum(mask_pp)
+          output_df <- rbind(output_df, c(cyc, side, pv, mn, val))
+        }
+      }
+    } else {
+      for (cycle_n in 1:nrow(events)) {
+        cyc <- cycle_n
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        act_sens <- which(footprint(pressure_data_, "max") > 0)
+        for (mask in seq_along(pressure_data[[5]])) {
+          mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+          for (i in 1:(dim(pressure_data[[1]])[3])) {
+            P <- c(pressure_data[[1]][, , i])
+            P <- P[act_sens]
+            mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
+              pressure_data[[4]]
+          }
+          mn <- names(pressure_data[[5]])[mask]
+          val <- sum(mask_pp)
+          output_df <- rbind(output_df, c(cyc, pv, mn, val))
+        }
+      }
+    }
+  }
+
+  # fix output
+  colnames(output_df) <- col_names
+  output_df$value <- as.numeric(output_df$value)
+
+  # units
+  #if (area_units == "cm2") {output_df$value <- output_df$value * 1e4}
+  #if (area_units == "mm2") {output_df$value <- output_df$value * 1e6}
+  if (pressure_units == "MPa") {output_df$value <- output_df$value * 0.001}
+  if (pressure_units == "Ncm2") {output_df$value <- output_df$value * 0.1}
+
+  # return
+  return(output_df)
+}
+
 
 # data
 pedar_insole_area <- function() {
