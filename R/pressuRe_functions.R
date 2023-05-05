@@ -2093,7 +2093,7 @@ dpli <- function(pressure_data) {
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- automask(pressure_data)
-#' mask_analysis(pressure_data, FALSE, variable = "pti_2")
+#' mask_analysis(pressure_data, FALSE, variable = "pti_1")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
@@ -3188,8 +3188,10 @@ pressure_peak <- function(pressure_data, sens_mask_df,
     if (pressure_data[[2]] == "pedar") {
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         P <- c(footprint(pressure_data_))
         for (mask in seq_along(pressure_data[[5]])) {
           mn <- names(pressure_data[[5]])[mask]
@@ -3202,8 +3204,10 @@ pressure_peak <- function(pressure_data, sens_mask_df,
     } else {
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         P <- c(footprint(pressure_data_))
         for (mask in seq_along(pressure_data[[5]])) {
           mn <- names(pressure_data[[5]])[mask]
@@ -3269,8 +3273,10 @@ pressure_mean <- function(pressure_data, sens_mask_df, mask_sides,
       pedarSensorAreas <- c(pedarSensorAreas, pedarSensorAreas)
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         P <- c(footprint(pressure_data_)) * pedarSensorAreas
         for (mask in seq_along(pressure_data[[5]])) {
           pv <- "press_peak_mask"
@@ -3286,8 +3292,10 @@ pressure_mean <- function(pressure_data, sens_mask_df, mask_sides,
       for (cycle_n in 1:nrow(events)) {
         sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         P <- c(footprint(pressure_data_))
         act_sens <- which(footprint(pressure_data, "max") > 0)
         P <- P[act_sens] * sensor_area * 1000
@@ -3353,8 +3361,10 @@ contact_area <- function(pressure_data, sens_mask_df, mask_sides,
       pedarSensorAreas <- c(pedarSensorAreas, pedarSensorAreas)
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         CA <- (c(footprint(pressure_data_)) > 0) * pedarSensorAreas
         for (mask in seq_along(pressure_data[[5]])) {
           mn <- names(pressure_data[[5]])[mask]
@@ -3367,8 +3377,10 @@ contact_area <- function(pressure_data, sens_mask_df, mask_sides,
       for (cycle_n in 1:nrow(events)) {
         sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         P <- c(footprint(pressure_data_))
         act_sens <- which(footprint(pressure_data, "max") > 0)
         P <- P[act_sens] * sensor_area * 1000
@@ -3434,8 +3446,10 @@ pti_1 <- function(pressure_data, sens_mask_df, mask_sides,
     if (pressure_data[[2]] == "pedar") {
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         for (mask in seq_along(pressure_data[[5]])) {
           mask_pp <- rep(NA, length.out = dim(pressure_data_[[1]])[3])
           for (i in 1:(dim(pressure_data_[[1]])[3])) {
@@ -3452,8 +3466,10 @@ pti_1 <- function(pressure_data, sens_mask_df, mask_sides,
     } else {
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         act_sens <- which(footprint(pressure_data_, "max") > 0)
         for (mask in seq_along(pressure_data[[5]])) {
           mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
@@ -3509,6 +3525,7 @@ pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
     time_seq <- seq(0, by = pressure_data[[4]],
                     length.out = dim(pressure_data[[1]])[3])
     sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+    act_sens <- which(footprint(pressure_data, "max") > 0)
     for (mask in seq_along(pressure_data[[5]])) {
       force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
       for (i in 1:(dim(pressure_data[[1]])[3])) {
@@ -3518,7 +3535,7 @@ pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
       }
       CA <- rep(sensor_area, length.out = length(act_sens))
       CA <- sum(CA * sens_mask_df[, mask])
-      val <- pracma::trapz(time_seq, force) / CA
+      val <- pracma::trapz(time_seq, force) / CA / 1000
       mn <- names(pressure_data[[5]])[mask]
       output_df <- rbind(output_df, c(pv, mn, val))
     }
@@ -3533,18 +3550,20 @@ pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
       pedarSensorAreas <- c(pedarSensorAreas, pedarSensorAreas)
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
+        time_seq <- seq(0, by = pressure_data[[4]],
+                        length.out = dim(pressure_data_[[1]])[3])
         for (mask in seq_along(pressure_data[[5]])) {
-          time_seq <- seq(0, by = pressure_data[[4]],
-                          length.out = dim(pressure_data_[[1]])[3])
           force <- rep(NA, length.out = dim(pressure_data_[[1]])[3])
           for (i in 1:(dim(pressure_data_[[1]])[3])) {
             P <- c(pressure_data_[[1]][, , i]) * pedarSensorAreas
-            force[i] <- sum(P * sens_mask_df[, mask])
+            force[i] <- sum(P * sens_mask_df[, mask]) / 1000
           }
           CA <- sum(pedarSensorAreas * sens_mask_df[, mask])
-          val <- pracma::trapz(time_seq, force) / CA / 10000
+          val <- pracma::trapz(time_seq, force) / CA * 1000
           side <- mask_sides[mask]
           mn <- names(pressure_data[[5]])[mask]
           output_df <- rbind(output_df, c(cyc, side, pv, mn, val))
@@ -3553,8 +3572,10 @@ pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
     } else {
       for (cycle_n in 1:nrow(events)) {
         cyc <- cycle_n
+        cyc_str <- unname(unlist(events[cycle_n, 2]))
+        cyc_end <- unname(unlist(events[cycle_n, 3]))
         pressure_data_ <- pressure_data
-        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        pressure_data_[[1]] <- pressure_data_[[1]][, , c(cyc_str:cyc_end)]
         act_sens <- which(footprint(pressure_data_, "max") > 0)
         sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
         for (mask in seq_along(pressure_data[[5]])) {
@@ -3587,8 +3608,6 @@ pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
   # return
   return(output_df)
 }
-
-
 
 # data
 pedar_insole_area <- function() {
