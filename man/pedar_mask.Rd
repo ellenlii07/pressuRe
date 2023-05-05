@@ -4,20 +4,24 @@
 \alias{pedar_mask}
 \title{Pedar mask template}
 \usage{
-pedar_mask(pressure_data, mask_type, plot = TRUE)
+pedar_mask(pressure_data, mask_type, n_sensors = 1, plot = TRUE)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
 
-\item{mask_type}{String.
+\item{mask_type}{String. Note, we refer to rearfoot as hindfoot
 "mask1" splits the insole into 4 regions using sensel boundaries:
-rearfoot, midfoot, forefoot, and toes-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9470545/
+hindfoot, midfoot, forefoot, and toes-- https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9470545/
 "mask2" splits the insole into 4 regions using percentages:
-rearfoot, forefoot, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-18
+hindfoot, forefoot, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-18
 "mask3" splits the foot into 9 regions using sensel boundaries:
- medial rearfoot, lateral rearfoot, medial midfoot, lateral midfoot, MTPJ1,
- MTPJ2-3, MTPJ4-5, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-20}
+ medial hindfoot, lateral hindfoot, medial midfoot, lateral midfoot, MTPJ1,
+ MTPJ2-3, MTPJ4-5, hallux, and lesser toes-- https://jfootankleres.biomedcentral.com/articles/10.1186/1757-1146-7-20
+"custom" allows you to select a mask region}
+
+\item{n_sensors}{Numeric. Number of sensors in the custom mask region. Custom
+masks will be added to the end of the existing list of masks.}
 
 \item{plot}{Logical. Plot masks if TRUE}
 }
