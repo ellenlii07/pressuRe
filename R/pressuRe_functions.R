@@ -1806,12 +1806,13 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
     # find point in sensor polygons
     for (sensor_idx in 1:198) {
       if (length(st_intersects(sensor_polygons[[sensor_idx]], selected_poly)[[1]]) == 1) {
-        sensor_list <- c(sensor_list, sensor_idx)
 
         if (sensor_idx > 99) {
           foot_side <- "LEFT"
+          sensor_list <- c(sensor_list, sensor_idx)
         } else {
           foot_side <- "RIGHT"
+          sensor_list <- c(sensor_list, sensor_idx-99)
         }
       }
     }
@@ -1856,7 +1857,7 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
 #' footprint pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
-#' of the measurement.
+#' of the measurement. Not currently available for pedar.
 #' @param foot_side String. "right" or "left". Required for automatic detection of
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
