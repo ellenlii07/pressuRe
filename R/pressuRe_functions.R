@@ -954,9 +954,9 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
-#' @param variable String. "max" = footprint of maximum sensors. "mean" = average
-#' value of sensors over time (usually for static analyses). "frame" = an
-#' individual frame
+#' @param variable String. "max" = footprint of maximum sensors. "mean" =
+#' average value of sensors over time (usually for static analyses). "frame" =
+#' an individual frame
 #' @param frame Integer.
 #' @param step_n Integer. Step number to plot (only for insole data)
 #' @param smooth Logical. Not implemented. If TRUE, plot will interpolate
@@ -980,6 +980,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' plot_pressure(pressure_data, variable = "frame", frame = 20,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
 #'               break_colors = c("blue", "green", "yellow", "red", "pink"))
+#' plot_pressure(pressure_data, variable = "max", step_n = 9)
 #' @importFrom ggplot2 ggplot aes geom_raster geom_polygon scale_fill_manual
 #' theme geom_point element_rect binned_scale unit
 #' @importFrom scales manual_pal
@@ -2742,9 +2743,11 @@ plot_pedar <- function(pressure_data, pressure_image = "max",
 
   # separate into steps
   if (pressure_image == "step_max") {
-    start_end_R <- pressure_data[[6]]
-    start_end_L <- pressure_data[[6]]
-    #pressure_R_mat <- pressure_R_mat[start_end_R[],]
+    events <- pressure_data[[6]]
+    pressure_R_mat <- pressure_R_mat[, c(events[step_n, 2]:events[step_n, 3])]
+    pressure_L_mat <- pressure_L_mat[, c(events[step_n, 2]:events[step_n, 3])]
+    R_data <- apply(pressure_R_mat, 1, max)
+    L_data <- apply(pressure_L_mat, 1, max)
   }
 
   # combine data
