@@ -912,7 +912,7 @@ cop <- function(pressure_data) {
 #' footprint(pressure_data, plot = TRUE)
 #' @export
 
-footprint <- function(pressure_data, variable = "max", frame,
+footprint <- function(pressure_data, variable = "max", frame = NULL,
                       plot = FALSE) {
   # check input
   if (is.array(pressure_data[[1]]) == FALSE)
@@ -936,11 +936,8 @@ footprint <- function(pressure_data, variable = "max", frame,
     }
   }
 
-  pd <- pressure_data
-  pd[[1]] <- mat
-
   # plot if requested
-  if (plot == TRUE) {g <- plot_pressure(pd)}
+  if (plot == TRUE) {g <- plot_pressure(pressure_data, variable, frame)}
 
   # return footprint
   return(mat)
@@ -958,7 +955,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' average value of sensors over time (usually for static analyses). "frame" =
 #' an individual frame
 #' @param frame Integer.
-#' @param step_n Integer. Step number to plot (only for insole data)
+#' @param step_n If numeric, the step number to plot (only for insole data).
 #' @param smooth Logical. Not implemented. If TRUE, plot will interpolate
 #'   between sensors to increase data density
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
@@ -2096,7 +2093,7 @@ dpli <- function(pressure_data) {
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- automask(pressure_data)
-#' mask_analysis(pressure_data, FALSE, variable = "pti_1")
+#' mask_analysis(pressure_data, FALSE, variable = "pti_2")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
@@ -2254,37 +2251,12 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
   if (variable == "pti_1") {
     output_df <- pti_1(pressure_data, sens_mask_df, mask_sides,
                        output_df, pressure_units)
-    #for (mask in seq_along(masks)) {
-    #  mask_pp <- rep(NA, length.out = dim(pressure_data[[1]])[3])
-    #  for (i in 1:(dim(pressure_data[[1]])[3])) {
-    #    P <- c(pressure_data[[1]][, , i])
-    #    P <- P[act_sens]
-    #    mask_pp[i] <- max(P[which(sens_mask_df[, mask] > 0)]) *
-    #      pressure_data[[4]] * 1000
-    #  }
-    #  output_mat[, mask] <- sum(mask_pp)
-    #}
-    #if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
-    #if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
   }
 
   # Analyse regions for pressure time integral (Melai definition)
   if (variable == "pti_2") {
-    time_seq <- seq(0, by = pressure_data[[4]],
-                    length.out = dim(pressure_data[[1]])[3])
-    for (mask in seq_along(masks)) {
-      force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
-      for (i in 1:(dim(pressure_data[[1]])[3])) {
-        P <- c(pressure_data[[1]][, , i])
-        P <- P[act_sens] * sensor_area * 1000
-        force[i] <- sum(P * sens_mask_df[, mask])
-      }
-      CA <- rep(sensor_area, length.out = length(act_sens))
-      CA <- sum(CA * sens_mask_df[, mask])
-      output_mat[, mask] <- pracma::trapz(time_seq, force) / CA / 10000
-    }
-    if (area_units == "cm2") {output_mat <- output_mat * 1e-04}
-    if (area_units == "mm2") {output_mat <- output_mat * 1e-06}
+    output_df <- pti_2(pressure_data, sens_mask_df, mask_sides,
+                       output_df, pressure_units)
   }
 
   # Analyse regions for force time integral
@@ -2694,7 +2666,7 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
 #' @description produces dataframe that plot_pressure uses to plot pedar data
 #' @param pressure_data List.
 #' @param pressure_image String. "max" = maximum values for full trial;
-#' "mean" = mean value across trial; "step_max"
+#' "mean" = mean value across trial; "step_max"; "step_mean"
 #' @param foot_side String. "both", "left", or "right"
 #' @param step_n Numeric. If pressure_image is "step_max", the step number to
 #' analyze
@@ -3512,6 +3484,110 @@ pti_1 <- function(pressure_data, sens_mask_df, mask_sides,
   # return
   return(output_df)
 }
+
+
+#' @title Pressure time integral (Melai)
+#' @description calculate PTI (as defined by Melai) for pressure data
+#' @noRd
+
+pti_2 <- function(pressure_data, sens_mask_df, mask_sides,
+                  output_df, pressure_units) {
+  # global variables
+  act_sens <- masks <- NULL
+
+  # events df
+  events <- pressure_data[[6]]
+
+  # output_names
+  col_names <- colnames(output_df)
+
+  # pressure variable
+  pv <- "pti_Melai"
+
+  # single step data
+  if (pressure_data[[2]] != "pedar" & length(events) == 0) {
+    time_seq <- seq(0, by = pressure_data[[4]],
+                    length.out = dim(pressure_data[[1]])[3])
+    sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+    for (mask in seq_along(pressure_data[[5]])) {
+      force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+      for (i in 1:(dim(pressure_data[[1]])[3])) {
+        P <- c(pressure_data[[1]][, , i])
+        P <- P[act_sens] * sensor_area * 1000
+        force[i] <- sum(P * sens_mask_df[, mask])
+      }
+      CA <- rep(sensor_area, length.out = length(act_sens))
+      CA <- sum(CA * sens_mask_df[, mask])
+      val <- pracma::trapz(time_seq, force) / CA
+      mn <- names(pressure_data[[5]])[mask]
+      output_df <- rbind(output_df, c(pv, mn, val))
+    }
+  }
+
+  # multi step/cycle data
+  if (length(events) > 0) {
+    if (pressure_data[[2]] == "pedar") {
+      pedar_insole_areas <- pedar_insole_area()
+      pedarSensorAreas <- as.vector(pedar_insole_areas[[pressure_data[[3]]]] *
+                                      1e-6)
+      pedarSensorAreas <- c(pedarSensorAreas, pedarSensorAreas)
+      for (cycle_n in 1:nrow(events)) {
+        cyc <- cycle_n
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        for (mask in seq_along(pressure_data[[5]])) {
+          time_seq <- seq(0, by = pressure_data[[4]],
+                          length.out = dim(pressure_data_[[1]])[3])
+          force <- rep(NA, length.out = dim(pressure_data_[[1]])[3])
+          for (i in 1:(dim(pressure_data_[[1]])[3])) {
+            P <- c(pressure_data_[[1]][, , i]) * pedarSensorAreas
+            force[i] <- sum(P * sens_mask_df[, mask])
+          }
+          CA <- sum(pedarSensorAreas * sens_mask_df[, mask])
+          val <- pracma::trapz(time_seq, force) / CA / 10000
+          side <- mask_sides[mask]
+          mn <- names(pressure_data[[5]])[mask]
+          output_df <- rbind(output_df, c(cyc, side, pv, mn, val))
+        }
+      }
+    } else {
+      for (cycle_n in 1:nrow(events)) {
+        cyc <- cycle_n
+        pressure_data_ <- pressure_data
+        pressure_data_[[1]] <- pressure_data_[[1]][, , unname(unlist(events[cycle_n, 2:3]))]
+        act_sens <- which(footprint(pressure_data_, "max") > 0)
+        sensor_area <- pressure_data[[3]][1] * pressure_data[[3]][2]
+        for (mask in seq_along(pressure_data[[5]])) {
+          force <- rep(NA, length.out = dim(pressure_data[[1]])[3])
+          for (i in 1:(dim(pressure_data[[1]])[3])) {
+            P <- c(pressure_data[[1]][, , i])
+            P <- P[act_sens] * sensor_area * 1000
+            force[i] <- sum(P * sens_mask_df[, mask])
+          }
+          CA <- rep(sensor_area, length.out = length(act_sens))
+          CA <- sum(CA * sens_mask_df[, mask])
+          val <- pracma::trapz(time_seq, force) / CA / 10000
+          mn <- names(pressure_data[[5]])[mask]
+          output_df <- rbind(output_df, c(cyc, pv, mn, val))
+        }
+      }
+    }
+  }
+
+  # fix output
+  colnames(output_df) <- col_names
+  output_df$value <- as.numeric(output_df$value)
+
+  # units
+  #if (area_units == "cm2") {output_df$value <- output_df$value * 1e4}
+  #if (area_units == "mm2") {output_df$value <- output_df$value * 1e6}
+  if (pressure_units == "MPa") {output_df$value <- output_df$value * 0.001}
+  if (pressure_units == "Ncm2") {output_df$value <- output_df$value * 0.1}
+
+  # return
+  return(output_df)
+}
+
 
 
 # data
