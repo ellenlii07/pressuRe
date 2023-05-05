@@ -11,6 +11,7 @@ create_mask(
   threshold = 0.005,
   plot_existing_mask = TRUE,
   image = "max",
+  mask_names = c("default"),
   preview = TRUE
 )
 }
@@ -27,8 +28,10 @@ sharing vertex coordinates}
 
 \item{plot_existing_mask}{Logical. Show exisiting masks}
 
-\item{image}{String. "max" = footprint of maximum sensors. "mean"
-average value of sensors over time (usually for static analyses)}
+\item{image}{String."max" = footprint of maximum sensors. "mean"
+average value of sensors over time}
+
+\item{mask_names}{List. Mask names. Default is "custom_mask#"}
 
 \item{preview}{Logical. Show new maks on pressure image}
 }
@@ -44,7 +47,9 @@ Manually create mask region
 \dontrun{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-pressure_data <- create_mask(pressure_data, 4)
+pressure_data <- create_mask(pressure_data, n_verts = 4, n_masks = 1,
+threshold = 0.005, plot_existing_mask = TRUE,
+image = "max", mask_names = c("default"), preview = TRUE)
 }
 }
 \author{

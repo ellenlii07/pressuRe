@@ -4,7 +4,14 @@
 \alias{pedar_mask}
 \title{Pedar mask template}
 \usage{
-pedar_mask(pressure_data, mask_type, n_sensors = 1, plot = TRUE)
+pedar_mask(
+  pressure_data,
+  mask_type,
+  n_sensors = 1,
+  image = "max",
+  mask_name = "custom_mask",
+  plot = TRUE
+)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
@@ -22,6 +29,11 @@ hindfoot, forefoot, hallux, and lesser toes-- https://jfootankleres.biomedcentra
 
 \item{n_sensors}{Numeric. Number of sensors in the custom mask region. Custom
 masks will be added to the end of the existing list of masks.}
+
+\item{image}{String."max" = footprint of maximum sensors. Or numeric for a
+specified frame number}
+
+\item{mask_name}{String. Add names to custom masks}
 
 \item{plot}{Logical. Plot masks if TRUE}
 }

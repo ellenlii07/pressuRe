@@ -8,7 +8,8 @@ edit_mask(
   pressure_data,
   n_edit,
   threshold = 0.002,
-  edit_list = seq(1, length(pressure_data[[5]]))
+  edit_list = seq(1, length(pressure_data[[5]])),
+  image = "max"
 )
 }
 \arguments{
@@ -24,6 +25,9 @@ they contain more vertices in the polygon)}
 \item{edit_list}{List. Mask numbers that want to be edited. (Default is to
 load all masks so that adjacent masks with shared coordinates are modified
 together)}
+
+\item{image}{String."max" = footprint of maximum sensors. "mean"
+average value of sensors over time}
 }
 \value{
 List. Edited mask is added to the relevant A 3D array covering each
@@ -39,7 +43,8 @@ threshold value
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
-edit_mask(pressure_data)
+pressure_data<- edit_mask((pressure_data, n_edit, threshold = 0.002,
+edit_list = seq(1,length(pressure_data[[5]])), image = "max")
 }
 }
 \author{

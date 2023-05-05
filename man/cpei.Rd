@@ -8,7 +8,7 @@ cpei(pressure_data, foot_side, plot_result = TRUE)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
-of the measurement.}
+of the measurement. Not currently available for pedar.}
 
 \item{foot_side}{String. "right" or "left". Required for automatic detection of
 points}

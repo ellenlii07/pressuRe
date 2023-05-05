@@ -988,7 +988,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                           plot_colors = "default", break_values, break_colors,
                           sensor_outline = TRUE, plot = TRUE, legend = TRUE) {
   # set global variables
-  x <- y <- id <- cols <- x_coord <- y_coord <- value <- NULL
+  x <- y <- X <- Y <- id <- cols <- x_coord <- y_coord <- value <- NULL
 
   # check inputs
   if (is.array(pressure_data[[1]]) == FALSE)
@@ -1388,6 +1388,8 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
                         threshold = 0.005, plot_existing_mask = TRUE,
                         image = "max", mask_names = c("default"), preview = TRUE) {
+  # global variables
+  x <- y <- NULL
 
   # empty data frame to store vertex coordinates
   mask_vertices <- data.frame(x = double(), y = double())
@@ -1631,6 +1633,7 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' pressure_data <- pedar_mask(pressure_data, "mask1")
 #' }
 #' @importFrom sf st_union st_difference st_bbox st_point
+#' @importFrom grDevices graphics.off
 #' @export
 
 pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",

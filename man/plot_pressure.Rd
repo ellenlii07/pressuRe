@@ -24,16 +24,16 @@ plot_pressure(
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
 measurement. z dimension represents time}
 
-\item{variable}{String. "max" = footprint of maximum sensors. "mean" = average
-value of sensors over time (usually for static analyses). "frame" = an
-individual frame}
+\item{variable}{String. "max" = footprint of maximum sensors. "mean" =
+average value of sensors over time (usually for static analyses). "frame" =
+an individual frame}
 
-\item{smooth}{Logical. If TRUE, plot will interpolate between sensors to
-increase data density}
+\item{smooth}{Logical. Not implemented. If TRUE, plot will interpolate
+between sensors to increase data density}
 
 \item{frame}{Integer.}
 
-\item{step_n}{Integer. Step number to plot (only for insole data)}
+\item{step_n}{If numeric, the step number to plot (only for insole data).}
 
 \item{plot_COP}{Logical. If TRUE, overlay COP data on plot. Default = FALSE}
 
@@ -63,10 +63,11 @@ Produce plot of pressure data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-plot_pressure(pressure_data, variable = "mean", plot_COP = FALSE)
+plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
 plot_pressure(pressure_data, variable = "frame", frame = 20,
               plot_colors = "custom", break_values = c(100, 200, 300, 750),
               break_colors = c("blue", "green", "yellow", "red", "pink"))
+plot_pressure(pressure_data, variable = "max", step_n = 9)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
