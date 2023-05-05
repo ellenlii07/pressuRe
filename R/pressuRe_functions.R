@@ -584,9 +584,13 @@ select_steps <- function (pressure_data, threshold_R = 30,
     Sys.sleep(1.5)
 
     # get user to approve or reject step
-    resp <- menu(c("Y", "N"),
+    resp <- menu(c("Y", "N", "EXIT"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    include_stps_R <- c(include_stps_R, resp)
+    if(resp == 3){
+      break
+    }else{
+      include_stps_R <- c(include_stps_R, resp)
+    }
 
     # check if number of steps has been reached
     if (sum(include_stps_R == 1) >= steps_Rn) {break}
@@ -612,10 +616,13 @@ select_steps <- function (pressure_data, threshold_R = 30,
     Sys.sleep(1.5)
 
     # get user to approve or reject step
-    resp <- menu(c("Y", "N"),
+    resp <- menu(c("Y", "N", "ExIT"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    include_stps_L <- c(include_stps_L, resp)
-
+    if (resp == 3){
+      break
+    }else{
+      include_stps_L <- c(include_stps_L, resp)
+    }
     # check if number of steps has been reached
     if (sum(include_stps_L == 1) >= steps_Ln) {break}
   }
@@ -1002,7 +1009,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
     fp_sens <- sensor_2_polygon(pressure_data, pressure_image = "all_active",
                                 output = "df")
     x_lim <- max(fp_sens$x)
-    y_lim <- max(fp_sens$y)
+    y_lim <- max(fp_sens$y) + .02
 
     # footprint
     fp <- footprint(pressure_data, variable = variable, frame)
@@ -1057,7 +1064,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
                         limits = c(0, range_max), show.limits = FALSE,
                         name = "Pressure (kPa)")
   g <- g + scale_x_continuous(expand = c(0, 0), limits = c(0, x_lim))
-  g <- g + scale_y_continuous(expand = c(0, 0), limits = c(0, y_lim))
+  g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.02, y_lim))
   g <- g + coord_fixed()
 
   # add COP?
@@ -1576,7 +1583,8 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
             }
           }
 
-          g <- g + geom_path(data = new_mask_v, aes(X, Y), color = color_v[edit + 1])
+          g <- g + geom_path(data = new_mask_v, aes(X, Y), color = color_v[edit + 1],
+                             linewidth = 1)
           mask_org[[n_mask]] <-
             st_polygon(list(as.matrix(new_mask_v)))
         }
@@ -1615,6 +1623,7 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' @param plot Logical. Plot masks if TRUE
 #' @param image String."max" = footprint of maximum sensors. Or numeric for a
 #' specified frame number
+#' @param mask_name String. Add names to custom masks
 #' @return List. Masks are added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
 #' time
@@ -1627,7 +1636,8 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' @importFrom sf st_union st_difference st_bbox st_point
 #' @export
 
-pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", plot = TRUE) {
+pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
+                       mask_name = "custom_mask",plot = TRUE) {
   # set global variables
   pedar_insole_grid <- x <- y <- id <- position <- NULL
 
@@ -1664,8 +1674,8 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
 
   } else if (mask_type == "mask2") {
     # foot outline and bounding box
-    bbox_L <- sf::st_bbox(pedar_polygon(position, 1:99, "LEFT"))
-    outline_mask <- pedar_polygon(position, 1:99, "LEFT")
+    bbox_L <- sf::st_bbox(pedar_polygon(pressure_data, 1:99, "LEFT"))
+    outline_mask <- pedar_polygon(pressure_data, 1:99, "LEFT")
 
     # define percent lines
     hindfoot_line_Ly <- (bbox_L$ymax - bbox_L$ymin) / 2 + bbox_L$ymin
@@ -1695,8 +1705,8 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
     hallux_L <- st_difference(toes_L, hallux_line_L_lat)
     lesser_toes_L <- st_difference(toes_L, hallux_line_L_med)
 
-    bbox_R <- sf::st_bbox(pedar_polygon(position, 1:99, "RIGHT"))
-    outline_mask <- pedar_polygon(position, 1:99, "RIGHT")
+    bbox_R <- sf::st_bbox(pedar_polygon(pressure_data, 1:99, "RIGHT"))
+    outline_mask <- pedar_polygon(pressure_data, 1:99, "RIGHT")
 
     hindfoot_line_Ry <- (bbox_R$ymax - bbox_R$ymin) / 2 + bbox_R$ymin
     forefoot_line_Ry <- (bbox_R$ymax - bbox_R$ymin) * 0.85 + bbox_R$ymin
@@ -1779,9 +1789,9 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
     # plot existing masks or pressure data
     if (length(pressure_data[[5]]) == 0) {
       grDevices::x11()
-      g <- plot_pressure(pressure_data, image, plot = TRUE)
+      g <- plot_pressure(pressure_data, variable = image, plot = TRUE)
     } else {
-      g <- plot_masks(pressure_data, image = image, plot = TRUE)
+      g <- plot_masks(pressure_data, image = "max")
     }
 
     # selection of sensors
@@ -1798,7 +1808,7 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
       if (length(st_intersects(sensor_polygons[[sensor_idx]], selected_poly)[[1]]) == 1) {
         sensor_list <- c(sensor_list, sensor_idx)
 
-        if (sensor_idx <- 100) {
+        if (sensor_idx > 99) {
           foot_side <- "LEFT"
         } else {
           foot_side <- "RIGHT"
@@ -1818,7 +1828,8 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
     mask_list <- pressure_data[[5]]
     mask_list[[length(mask_list) + 1]] <- custom_mask
     pressure_data[[5]] <- mask_list
-
+    names(pressure_data[[5]][[length(mask_list)]]) <- mask_name
+    graphics.off()
   } else {
     stop("Please select an existing mask")
   }
@@ -1828,7 +1839,7 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max", p
     if(image == "max"){
        plot_masks(pressure_data, image = "max")
     }else if(is.numeric(image)){
-      plot_masks(pressure_data, frame = image)
+      plot_masks(pressure_data, image = image)
     }
 
   }
@@ -2686,7 +2697,7 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
     stop("must be pedar data")
 
   # get insole sizing
-  pedar_insole_type <- pressure_data[[3]]
+  pedar_insole_type <- tolower(pressure_data[[3]])
 
   # get pedar sensor areas
   pedar_insole_areas <- pedar_insole_area()
@@ -3156,7 +3167,7 @@ plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[
     g <- g + scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 0.30))
   }else{
     if(image == "max"){
-      g <- plot_pressure(pressure_data, image = "max", plot = FALSE)
+      g <- plot_pressure(pressure_data, variable = "max", plot = FALSE)
     }else if (is.numeric(image)){
       g <- plot_pressure(pressure_data, frame = image, plot = FALSE)
     }else{
@@ -3192,7 +3203,7 @@ pedar_polygon <- function(pressure_data, sensel_list, foot_side){
                                    frame = NA, output = "sf")
 
   # Left foot sensels are stored as 1:99, right foot senses are 101:99
-  if (foot_side == "LEFT"){
+  if (foot_side == "RIGHT"){
     sensel_list <- sensel_list + 99
   }
 
@@ -3472,6 +3483,7 @@ pedar_insole_area <- function() {
                                           181, 177, 175, 172, 170, 169, 167, 165,
                                           153, 276, 152, 149, 147, 235, 116, 122,
                                           124, 109, 76))
+  return(pedar_insole_areas)
 }
 
 pedar_insole_grids <- function() {
@@ -3743,4 +3755,5 @@ pedar_insole_grids <- function() {
                                          0.822, 0.822, 0.822, 0.822, 0.822, 0.822,
                                          0.822, 0.878, 0.878, 0.878, 0.878, 0.878,
                                          0.878, 0.931, 0.931, 0.931, 0.931))
+  return(pedar_insole_grid)
 }
