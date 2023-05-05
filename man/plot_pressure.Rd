@@ -15,6 +15,7 @@ plot_pressure(
   plot_colors = "default",
   break_values,
   break_colors,
+  sensor_outline = TRUE,
   plot = TRUE,
   legend = TRUE
 )
@@ -47,6 +48,8 @@ colors at}
 \item{break_colors}{Vector. If plot_colors is "custom", colors to use.
 Should be one shorter than break_values}
 
+\item{sensor_outline}{Logical. Sensor outline to be shown}
+
 \item{plot}{Logical. If TRUE, plot will be displayed}
 
 \item{legend}{Logical. If TRUE, legend will be added to plot}
@@ -60,7 +63,7 @@ Produce plot of pressure data
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
-plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
+plot_pressure(pressure_data, variable = "mean", plot_COP = FALSE)
 plot_pressure(pressure_data, variable = "frame", frame = 20,
               plot_colors = "custom", break_values = c(100, 200, 300, 750),
               break_colors = c("blue", "green", "yellow", "red", "pink"))

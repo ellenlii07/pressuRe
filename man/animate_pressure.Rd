@@ -9,8 +9,7 @@ animate_pressure(
   plot_colors = "default",
   fps,
   dpi = 96,
-  file_name,
-  preview = FALSE
+  file_name
 )
 }
 \arguments{
@@ -24,8 +23,6 @@ measurement. z dimension represents time}
 \item{dpi}{Numeric. Resolution of gif}
 
 \item{file_name}{Name (inlcuding path) of export file}
-
-\item{preview}{Logical. Whether to play the animation}
 }
 \value{
 Animation in gif format
