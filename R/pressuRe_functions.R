@@ -586,9 +586,9 @@ select_steps <- function (pressure_data, threshold_R = 30,
     # get user to approve or reject step
     resp <- menu(c("Y", "N", "EXIT"),
                  title = "Do you want to keep (Y) or discard (N) this step?")
-    if(resp == 3){
+    if (resp == 3) {
       break
-    }else{
+    } else {
       include_stps_R <- c(include_stps_R, resp)
     }
 
@@ -955,12 +955,12 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param variable String. "max" = footprint of maximum sensors. "mean" = average
-#'   value of sensors over time (usually for static analyses). "frame" = an
-#'   individual frame
+#' value of sensors over time (usually for static analyses). "frame" = an
+#' individual frame
 #' @param frame Integer.
 #' @param step_n Integer. Step number to plot (only for insole data)
-#' @param smooth Logical. If TRUE, plot will interpolate between sensors to
-#' increase data density
+#' @param smooth Logical. Not implemented. If TRUE, plot will interpolate
+#'   between sensors to increase data density
 #' @param plot_COP Logical. If TRUE, overlay COP data on plot. Default = FALSE
 #' @param plot_outline Logical. If TRUE, overlay convex hull outline on plot
 #' @param plot_colors String. "default": novel color scheme; "custom": user
@@ -976,7 +976,7 @@ footprint <- function(pressure_data, variable = "max", frame,
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
-#' plot_pressure(pressure_data, variable = "mean", plot_COP = FALSE)
+#' plot_pressure(pressure_data, variable = "max", plot_COP = FALSE)
 #' plot_pressure(pressure_data, variable = "frame", frame = 20,
 #'               plot_colors = "custom", break_values = c(100, 200, 300, 750),
 #'               break_colors = c("blue", "green", "yellow", "red", "pink"))
@@ -1075,11 +1075,10 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
   # add outline
   if (plot_outline == TRUE) {
-    ch_out <- pressure_outline(pressure_data)
-    g <- g + geom_path(data = ch_out, aes(x = x_coord, y = y_coord),
-                       colour = "black")
-    g <- g + geom_point(data = ch_out, aes(x = x_coord, y = y_coord),
-                        colour = "purple")
+    ch_out <- st_coordinates(pressure_outline(pressure_data))
+    ch_out <- as.data.frame(ch_out)[, c(1, 2)]
+    g <- g + geom_path(data = ch_out, aes(x = X, y = Y), colour = "black")
+    g <- g + geom_point(data = ch_out, aes(x = X, y = Y), colour = "purple")
   }
 
   # formatting
@@ -1806,12 +1805,13 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
     # find point in sensor polygons
     for (sensor_idx in 1:198) {
       if (length(st_intersects(sensor_polygons[[sensor_idx]], selected_poly)[[1]]) == 1) {
-        sensor_list <- c(sensor_list, sensor_idx)
 
         if (sensor_idx > 99) {
           foot_side <- "LEFT"
+          sensor_list <- c(sensor_list, sensor_idx)
         } else {
           foot_side <- "RIGHT"
+          sensor_list <- c(sensor_list, sensor_idx-99)
         }
       }
     }
@@ -1856,7 +1856,7 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
 #' footprint pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
-#' of the measurement.
+#' of the measurement. Not currently available for pedar.
 #' @param foot_side String. "right" or "left". Required for automatic detection of
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
