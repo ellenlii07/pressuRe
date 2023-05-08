@@ -5,9 +5,7 @@
 # automask2: toe line modifications
 # fscan processing needs to be checked (work with NA?)
 # in edit_mask, make edit_list a vector that works with numbers or names?
-# DPLI function
 # fix toe side on mask2 pedar mask
-# stop double appearance with custom "pedar_mask
 
 
 # to do (future)
@@ -31,7 +29,6 @@
 #' @title Load emed data
 #' @description Imports and formats .lst files collected on emed system and
 #'    exported from Novel software
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
@@ -171,7 +168,6 @@ load_emed <- function(pressure_filepath) {
 #' @title Load pedar data
 #' @description Imports and formats .asc files collected on pedar system and
 #'    exported from Novel software
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
@@ -236,7 +232,6 @@ load_pedar <- function(pressure_filepath) {
 #' @title Load Tekscan data
 #' @description Imports and formats files collected on tekscan systems and
 #'    exported from Tekscan software
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
@@ -321,7 +316,6 @@ load_tekscan <- function(pressure_filepath) {
 #' @title Load footscan data
 #' @description Imports and formats files collected on footscan systems
 #' (formerly RSScan)
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_filepath String. Filepath pointing to emed pressure file
 #' @return A list with information about the pressure data.
 #' \itemize{
@@ -393,8 +387,6 @@ load_footscan <- function(pressure_filepath) {
 #' @title Interpolate pressure data
 #' @description Resamples pressure data over time. Useful for normalizing to
 #' stance phase, for example
-#' @author Scott Telfer
-#' \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time.
 #' @param interp_to Integer. Number of frames to interpolate to
@@ -651,7 +643,6 @@ select_steps <- function (pressure_data, threshold_R = 10,
 #' right), usually would only be needed for pressure plate data. Generally
 #' reliable but may be thrown off by severe deformities or abnormal walking
 #' patterns
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
 #' @return String. "LEFT" or "RIGHT"
@@ -830,7 +821,6 @@ whole_pressure_curve <- function(pressure_data, variable, side, threshold = 10,
 #' @title Center of pressure
 #' @description Generates xy coordinates for center of pressure during each
 #' frame of measurement
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
 #' @return Data frame with x and y coordinates of COP throughout trial
@@ -898,7 +888,6 @@ cop <- function(pressure_data) {
 
 #' @title Footprint
 #' @description Determines footprint of pressure data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param variable String. "max" = maximum value of each sensor across full
@@ -949,7 +938,6 @@ footprint <- function(pressure_data, variable = "max", frame = NULL,
 
 #' @title Plot pressure
 #' @description Produces visualization of pressure data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param variable String. "max" = footprint of maximum sensors. "mean" =
@@ -1099,7 +1087,6 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 
 #' @title Animate pressure
 #' @description Produces animation (gif) of pressure data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param plot_colors String
@@ -1175,7 +1162,6 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 
 #' @title automask footprint
 #' @description Automatically creates mask of footprint data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
 #' @param foot_side String. "RIGHT", "LEFT", or "auto". Auto uses
@@ -1364,7 +1350,6 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 
 #' @title Create mask
 #' @description Allows user to manually define mask region
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_verts Numeric. Number of vertices in mask
@@ -1501,7 +1486,6 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
 
 #' @title Edit mask
 #' @description Allows user to manually adjust mask vertices
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_edit Numeric. Number of vertices to edit
@@ -2076,7 +2060,6 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @title Dynamic Plantar Loading Index
 #' @description Determine Dynamic plantar loading index (DPLI) for
 #' footprint pressure data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_bins Numeric. Number of bins used to calculate DPLI
@@ -2151,7 +2134,6 @@ dpli <- function(pressure_data, n_bins) {
 # =============================================================================
 
 #' Analyze masked regions of pressure data
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param partial_sensors Logical Defines how sensors that do not
@@ -2386,7 +2368,6 @@ mask_analysis <- function(pressure_data, partial_sensors = FALSE,
 
 #' @title Get outline of pressure region
 #' Determine outline (convex hull) of pressure measurement
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param pressure_image String. "max" = footprint of maximum sensors. "frame"
@@ -2562,7 +2543,6 @@ masks_2_df <- function(masks) {
 
 #' @title Get coordinates of active sensors
 #' @description Produces a data frame with coordinates of sensors
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
 #' @param pressure_image. String. Which pressure image to use. Options are
@@ -3172,7 +3152,6 @@ rot_line <- function(line, ang, cnt) {
 
 #' @title Visualize masks
 #' @description Visualize the existing masks
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param visual_list List. Mask numbers that want to be viewed. (Default is
@@ -3226,7 +3205,6 @@ plot_masks <- function(pressure_data,
 
 #' @title Pedar mask regions
 #' @description Creates a mask region from pedar sensel coordinates
-#' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List.
 #' @param position Dataframe. A n x 3 dataframe of sensel coordinates
 #' [sensel id, x, y]
