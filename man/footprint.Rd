@@ -4,7 +4,7 @@
 \alias{footprint}
 \title{Footprint}
 \usage{
-footprint(pressure_data, variable = "max", frame, plot = FALSE)
+footprint(pressure_data, variable = "max", frame = NULL, plot = FALSE)
 }
 \arguments{
 \item{pressure_data}{List. Includes a 3D array covering each timepoint of the
@@ -22,7 +22,7 @@ individual pressure frame}
 Matrix. Maximum or mean values for all sensors
 }
 \description{
-Find footprint of pressure file
+Determines footprint of pressure data
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")

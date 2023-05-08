@@ -13,15 +13,24 @@ of the measurement. z dimension represents time}
 \item{foot_side}{String. "RIGHT", "LEFT", or "auto". Auto uses
 auto_detect_side function}
 
-\item{mask_scheme}{List.}
+\item{mask_scheme}{String.}
 
 \item{plot}{Logical. Whether to play the animation}
 }
 \value{
-List. Contains polygon with each mask
+List. Masks are added to pressure data variable
+\itemize{
+  \item pressure_array. 3D array covering each timepoint of the measurement.
+           z dimension represents time
+  \item pressure_system. String defining pressure system
+  \item sens_size. Numeric vector with the dimensions of the sensors
+  \item time. Numeric value for time between measurements
+  \item masks. List
+  \item events. List
+ }
 }
 \description{
-Automatically create mask of footprint data
+Automatically creates mask of footprint data
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
