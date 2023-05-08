@@ -474,20 +474,18 @@ pressure_interp <- function(pressure_data, interp_to) {
 #'   \item masks. List
 #'   \item events. List
 #'   }
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
 #' pressure_data <- load_pedar(pedar_data)
 #' pressure_data <- select_steps(pressure_data)
-#' }
 #' @importFrom ggplot2 ggplot aes geom_line xlab ylab ggtitle
 #' @importFrom magrittr "%>%"
 #' @importFrom dplyr filter
 #' @importFrom utils menu
 #' @export
 
-select_steps <- function (pressure_data, threshold_R = 30,
-                          threshold_L = 30, min_frames = 10,
+select_steps <- function (pressure_data, threshold_R = 10,
+                          threshold_L = 10, min_frames = 10,
                           steps_Rn = 5, steps_Ln = 5, skip = 2) {
   # set up global variables
   frame <- NULL
@@ -1106,12 +1104,10 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 #' @param dpi Numeric. Resolution of gif
 #' @param file_name Name (inlcuding path) of export file
 #' @return Animation in gif format
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' animate_pressure(pressure_data, fps = 10, file_name = "testgif.gif")
-#' }
 #' @importFrom stringr str_ends str_pad
 #' @importFrom magick image_graph image_animate image_write image_info
 #' image_read
@@ -1371,14 +1367,12 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @return List New mask is added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
 #' time
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- create_mask(pressure_data, n_verts = 4, n_masks = 1,
 #' threshold = 0.005, plot_existing_mask = TRUE,
 #' image = "max", mask_names = c("default"), preview = TRUE)
-#' }
 #' @importFrom grDevices x11
 #' @importFrom ggmap gglocator
 #' @importFrom ggplot2 aes geom_path
@@ -1504,14 +1498,12 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
 #' @return List. Edited mask is added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
 #' time
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- automask(pressure_data, foot_side = "auto", plot = TRUE)
-#' pressure_data<- edit_mask((pressure_data, n_edit, threshold = 0.002,
-#' edit_list = seq(1,length(pressure_data[[5]])), image = "max")
-#' }
+#' pressure_data <- edit_mask(pressure_data, n_edit, threshold = 0.002,
+#'   edit_list = seq(1,length(pressure_data[[5]])), image = "max")
 #' @importFrom grDevices rainbow
 #' @export
 
@@ -1626,12 +1618,10 @@ edit_mask <- function(pressure_data, n_edit, threshold = 0.002,
 #' @return List. Masks are added to the relevant A 3D array covering each
 #' timepoint of the measurement for the selected region. z dimension represents
 #' time
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
 #' pressure_data <- load_pedar(pedar_data)
 #' pressure_data <- pedar_mask(pressure_data, "mask1")
-#' }
 #' @importFrom sf st_union st_difference st_bbox st_point
 #' @importFrom grDevices graphics.off
 #' @export
@@ -1862,12 +1852,10 @@ pedar_mask <- function(pressure_data, mask_type, n_sensors = 1, image = "max",
 #'   points
 #' @param plot_result Logical. Plots pressure image with COP and CPEI overlaid
 #' @return Numeric. CPEI value
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' cpei(pressure_data, foot_side = "auto", plot = TRUE)
-#' }
 #' @importFrom sf st_convex_hull st_linestring st_distance st_coordinates
 #' @importFrom dplyr pull summarise
 #' @export
@@ -2067,10 +2055,70 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
+#' @param n_bins Numeric. Number of bins used to calculate DPLI
+#' @examples
+#' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+#' pressure_data <- load_emed(emed_data)
+#' dpli(pressure_data, 10)
 #' @export
 
-dpli <- function(pressure_data) {
+dpli <- function(pressure_data, n_bins) {
+  if (length(pressure_data[[6]]) == 0) {
+    n_step = 1
+  } else {
+    n_step = nrow(pressure_data[[6]])
+  }
 
+  # df to store result
+  dpli <- data.frame(step = c(1:n_step),
+                     dpli = rep(NA, length.out = n_step))
+
+  # get loading index for each step
+  for (step in 1:n_step) {
+    # get step data
+    if (n_step == 1) {
+      pressure_array <- pressure_data[[1]]
+    } else {
+      step_str <- unname(unlist(pressure_data[[6]][step, 2]))
+      step_end <- unname(unlist(pressure_data[[6]][step, 3]))
+      pressure_array <- pressure_data[[1]][, , c(step_str:step_end)]
+    }
+
+    # check for step side (pedar)
+    if (pressure_data[[2]] == "pedar") {
+      if (pressure_data[[6]][step, 1] == "RIGHT") {
+        pressure_array[2, , ] <- 0
+      } else {pressure_array[1, , ] <- 0}
+    }
+
+    # get peak pressure vector
+    press_vec <- rep(NA, length.out = dim(pressure_array)[3])
+    for (i in 1:dim(pressure_array)[3]) {
+      press_vec[i] <- max(pressure_array[, , i])
+    }
+
+    # interpolate to 101
+    press_vec <- approxP(press_vec, 101)
+
+    # bin data
+    binned <- hist(press_vec, breaks = seq(from = min(press_vec),
+                                           to = max(press_vec),
+                                           length.out = n_bins + 1),
+                   plot = FALSE)
+
+    # get distribution
+    sd_press <- sd(press_vec)
+    mean_press <- mean(press_vec)
+    norm_dist <- dnorm(binned$mids, mean_press, sd_press)
+    norm_dist <- norm_dist * (max(binned$counts) / max(norm_dist))
+
+
+    # get r^2
+    dpli[step, 2] <- summary(lm(binned$counts ~ norm_dist))$adj.r.squared
+  }
+
+  # return
+  return(dpli)
 }
 
 # =============================================================================
@@ -2355,6 +2403,7 @@ pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
   # return convex hull coordinates
   return(fp_chull_buffer)
 }
+
 
 #' interpolation function
 #' @importFrom stats approx
@@ -3198,7 +3247,7 @@ pressure_peak <- function(pressure_data, sens_mask_df,
         P <- c(footprint(pressure_data_))
         for (mask in seq_along(pressure_data[[5]])) {
           mn <- names(pressure_data[[5]])[mask]
-          side <- "R"#mask_sides[mask]
+          side <- mask_sides[mask]
           pv <- "press_peak_sensor"
           val <- max(P[which(sens_mask_df[, mask] > 0)])
           output_df <- rbind(output_df, c(cyc, side, pv, mn, val))

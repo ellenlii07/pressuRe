@@ -46,11 +46,11 @@ time
 Add a Pedar mask template using 3 in current literature
 }
 \examples{
-\dontrun{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 pedar_data <- system.file("extdata", "pedar_example.asc", package = "pressuRe")
 pressure_data <- load_pedar(pedar_data)
 pressure_data <- pedar_mask(pressure_data, "mask1")
-}
+\dontshow{\}) # examplesIf}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

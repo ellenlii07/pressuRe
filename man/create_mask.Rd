@@ -44,13 +44,13 @@ time
 Manually create mask region
 }
 \examples{
-\dontrun{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 pressure_data <- create_mask(pressure_data, n_verts = 4, n_masks = 1,
 threshold = 0.005, plot_existing_mask = TRUE,
 image = "max", mask_names = c("default"), preview = TRUE)
-}
+\dontshow{\}) # examplesIf}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
