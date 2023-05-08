@@ -64,7 +64,7 @@ load_emed <- function(pressure_filepath) {
   pressure_raw <- readLines(pressure_filepath, warn = FALSE)
 
   # get sensor size
-  sens_size_ln <- which(grepl("Sensor size", pressure_raw))[1]
+  sens_size_ln <- which(grepl("Sensor size", pressure_raw, useBytes = TRUE))[1]
   sens_size <- str_extract_all(pressure_raw[sens_size_ln], "\\d+\\.\\d+")
   sens_size <- as.numeric(unlist(sens_size))
   if (str_detect(pressure_raw[sens_size_ln], "cm") == TRUE) {
@@ -72,7 +72,7 @@ load_emed <- function(pressure_filepath) {
   }
 
   # get capture frequency
-  time_line <- which(grepl("Time", pressure_raw))[1]
+  time_line <- which(grepl("Time", pressure_raw, useBytes = TRUE))[1]
   time_ln <- str_split(pressure_raw[time_line], "picture:")[[1]][2]
   time <- as.numeric(unlist(str_extract_all(time_ln, "\\d+\\.\\d+")))
   if (str_detect(time_ln, "ms") == TRUE) {time <- time / 1000}
