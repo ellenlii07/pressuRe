@@ -6,8 +6,8 @@
 \usage{
 select_steps(
   pressure_data,
-  threshold_R = 30,
-  threshold_L = 30,
+  threshold_R = 10,
+  threshold_L = 10,
   min_frames = 10,
   steps_Rn = 5,
   steps_Ln = 5,
@@ -15,7 +15,8 @@ select_steps(
 )
 }
 \arguments{
-\item{pressure_data}{List}
+\item{pressure_data}{List. First item should be a 3D array covering each
+timepoint of the measurement. z dimension represents time.}
 
 \item{threshold_R}{Numeric. Threshold force to define start and end of step}
 

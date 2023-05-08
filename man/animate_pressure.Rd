@@ -28,7 +28,7 @@ measurement. z dimension represents time}
 Animation in gif format
 }
 \description{
-Produce animation (gif) of pressure distribution
+Produces animation (gif) of pressure data
 }
 \examples{
 \dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}

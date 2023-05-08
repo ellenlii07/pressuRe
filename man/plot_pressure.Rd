@@ -58,7 +58,7 @@ Should be one shorter than break_values}
 ggplot plot object
 }
 \description{
-Produce plot of pressure data
+Produces visualization of pressure data
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")

@@ -19,8 +19,7 @@ of the measurement.}
 \item{n_edit}{Numeric. Number of vertices to edit}
 
 \item{threshold}{Numeric. Distance between point clicked and vertex that is
-selected (smaller thresholds are recommended when editing automasks becasue
-they contain more vertices in the polygon)}
+selected}
 
 \item{edit_list}{List. Mask numbers that want to be edited. (Default is to
 load all masks so that adjacent masks with shared coordinates are modified
@@ -30,13 +29,19 @@ together)}
 average value of sensors over time}
 }
 \value{
-List. Edited mask is added to the relevant A 3D array covering each
-timepoint of the measurement for the selected region. z dimension represents
-time
+List. Edited mask is added to the pressure data variable
+\itemize{
+  \item pressure_array. 3D array covering each timepoint of the measurement.
+           z dimension represents time
+  \item pressure_system. String defining pressure system
+  \item sens_size. Numeric vector with the dimensions of the sensors
+  \item time. Numeric value for time between measurements
+  \item masks. List
+  \item events. List
+ }
 }
 \description{
-Manually edit mask, also simplifies automask vertices to the
-threshold value
+Allows user to manually adjust mask vertices
 }
 \examples{
 \dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}

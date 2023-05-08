@@ -22,7 +22,7 @@ individual pressure frame}
 Matrix. Maximum or mean values for all sensors
 }
 \description{
-Find footprint of pressure file
+Determines footprint of pressure data
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")

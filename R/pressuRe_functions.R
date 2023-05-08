@@ -391,8 +391,8 @@ load_footscan <- function(pressure_filepath) {
 # =============================================================================
 
 #' @title Interpolate pressure data
-#' @description Interpolates data over time. Useful for normalizing to stance
-#' phase, for example
+#' @description Resamples pressure data over time. Useful for normalizing to
+#' stance phase, for example
 #' @author Scott Telfer
 #' \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
@@ -452,7 +452,8 @@ pressure_interp <- function(pressure_data, interp_to) {
 
 #' @title Select steps
 #' @description Select steps, usually from insole data, and format for analysis
-#' @param pressure_data List
+#' @param pressure_data List. First item should be a 3D array covering each
+#' timepoint of the measurement. z dimension represents time.
 #' @param threshold_R Numeric. Threshold force to define start and end of step
 #' @param threshold_L Numeric. Threshold force to define start and end of step
 #' @param min_frames Numeric. Minimum number of frames that need to be in step
@@ -648,7 +649,8 @@ select_steps <- function (pressure_data, threshold_R = 10,
 #' @title Detect foot side
 #' @description Detects which foot plantar pressure data is from (left or
 #' right), usually would only be needed for pressure plate data. Generally
-#' seems to work but may be thrown off by severe deformities
+#' reliable but may be thrown off by severe deformities or abnormal walking
+#' patterns
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item should be a 3D array covering each
 #' timepoint of the measurement. z dimension represents time
@@ -826,7 +828,8 @@ whole_pressure_curve <- function(pressure_data, variable, side, threshold = 10,
 # =============================================================================
 
 #' @title Center of pressure
-#' @description Generates center of pressure coordinates
+#' @description Generates xy coordinates for center of pressure during each
+#' frame of measurement
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
@@ -894,7 +897,7 @@ cop <- function(pressure_data) {
 # =============================================================================
 
 #' @title Footprint
-#' @description Find footprint of pressure file
+#' @description Determines footprint of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -945,7 +948,7 @@ footprint <- function(pressure_data, variable = "max", frame = NULL,
 # =============================================================================
 
 #' @title Plot pressure
-#' @description Produce plot of pressure data
+#' @description Produces visualization of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. Includes a 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -1095,7 +1098,7 @@ plot_pressure <- function(pressure_data, variable = "max", smooth = FALSE, frame
 # =============================================================================
 
 #' @title Animate pressure
-#' @description Produce animation (gif) of pressure distribution
+#' @description Produces animation (gif) of pressure data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data Array. A 3D array covering each timepoint of the
 #'   measurement. z dimension represents time
@@ -1171,15 +1174,24 @@ animate_pressure <- function(pressure_data, plot_colors = "default", fps,
 # =============================================================================
 
 #' @title automask footprint
-#' @description Automatically create mask of footprint data
+#' @description Automatically creates mask of footprint data
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement. z dimension represents time
 #' @param foot_side String. "RIGHT", "LEFT", or "auto". Auto uses
 #' auto_detect_side function
-#' @param mask_scheme List.
+#' @param mask_scheme String.
 #' @param plot Logical. Whether to play the animation
-#' @return List. Contains polygon with each mask
+#' @return List. Masks are added to pressure data variable
+#' \itemize{
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item pressure_system. String defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
+#'  }
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
@@ -1351,7 +1363,7 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 # =============================================================================
 
 #' @title Create mask
-#' @description Manually create mask region
+#' @description Allows user to manually define mask region
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
@@ -1359,14 +1371,21 @@ automask <- function(pressure_data, foot_side = "auto", mask_scheme,
 #' @param n_masks Numeric. Number of masks to add
 #' @param threshold Numeric. Distance between adjacent mask vertices before
 #' sharing vertex coordinates
-#' @param plot_existing_mask Logical. Show exisiting masks
+#' @param plot_existing_mask Logical. Show existing masks
 #' @param image String."max" = footprint of maximum sensors. "mean"
 #' average value of sensors over time
 #' @param mask_names List. Mask names. Default is "custom_mask#"
 #' @param preview Logical. Show new maks on pressure image
-#' @return List New mask is added to the relevant A 3D array covering each
-#' timepoint of the measurement for the selected region. z dimension represents
-#' time
+#' @return List. Mask(s) are added to pressure data variable
+#' \itemize{
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item pressure_system. String defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
+#'  }
 #' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
@@ -1481,23 +1500,28 @@ create_mask <- function(pressure_data, n_verts = 4, n_masks = 1,
 # =============================================================================
 
 #' @title Edit mask
-#' @description Manually edit mask, also simplifies automask vertices to the
-#' threshold value
+#' @description Allows user to manually adjust mask vertices
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_edit Numeric. Number of vertices to edit
 #' @param threshold Numeric. Distance between point clicked and vertex that is
-#' selected (smaller thresholds are recommended when editing automasks becasue
-#' they contain more vertices in the polygon)
+#' selected
 #' @param edit_list List. Mask numbers that want to be edited. (Default is to
 #' load all masks so that adjacent masks with shared coordinates are modified
 #' together)
 #' @param image String."max" = footprint of maximum sensors. "mean"
 #' average value of sensors over time
-#' @return List. Edited mask is added to the relevant A 3D array covering each
-#' timepoint of the measurement for the selected region. z dimension represents
-#' time
+#' @return List. Edited mask is added to the pressure data variable
+#' \itemize{
+#'   \item pressure_array. 3D array covering each timepoint of the measurement.
+#'            z dimension represents time
+#'   \item pressure_system. String defining pressure system
+#'   \item sens_size. Numeric vector with the dimensions of the sensors
+#'   \item time. Numeric value for time between measurements
+#'   \item masks. List
+#'   \item events. List
+#'  }
 #' @examplesIf interactive()
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
@@ -2056,10 +2080,13 @@ cpei <- function(pressure_data, foot_side, plot_result = TRUE) {
 #' @param pressure_data List. First item is a 3D array covering each timepoint
 #' of the measurement.
 #' @param n_bins Numeric. Number of bins used to calculate DPLI
+#' @returns Data frame. Contains DPLI for each step
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' dpli(pressure_data, 10)
+#' @importFrom graphics hist
+#' @importFrom stats dnorm lm sd
 #' @export
 
 dpli <- function(pressure_data, n_bins) {
@@ -2132,19 +2159,19 @@ dpli <- function(pressure_data, n_bins) {
 #'   if TRUE, for relevant variables their contribution will be weighted by the
 #'   proportion of the sensor that falls within the mask border
 #' @param variable String. Variable to be determined. "press_peak_sensor",
-#'  "press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
-#'  "contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
-#'  "force_time_integral", "force_peak", "force_ts"
+#' "press_peak_mask", "contact_area_peak", "pti_1", "pti_2",
+#' "force_time_integral", "force_peak"
 #' @param pressure_units String. Default "kPa". Other options: "MPa", "Ncm2"
 #' (Newtons per square centimeter)
 #' @param area_units String. Default is "cm2" (square centimeters). Other
 #' options "m2" (square meters); "mm2" (square millimeters)
-#' @return Data frame.
+#' @return Data frame. Contains values for each mask plus additional information
+#' relevant to the data including cycle/step and foot side
 #' @examples
 #' emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 #' pressure_data <- load_emed(emed_data)
 #' pressure_data <- automask(pressure_data)
-#' mask_analysis(pressure_data, FALSE, variable = "pti_1")
+#' mask_analysis(pressure_data, FALSE, variable = "press_peak")
 #' @importFrom sf st_intersects st_geometry st_area
 #' @importFrom pracma trapz
 #' @export
@@ -2408,6 +2435,7 @@ pressure_outline <- function(pressure_data, pressure_image = "max", frame) {
 #' interpolation function
 #' @importFrom stats approx
 #' @noRd
+
 approxP <- function(x, interp_to) {
   y <- approx(x, n = interp_to)
   y$x <- NULL
@@ -2424,6 +2452,7 @@ approxP <- function(x, interp_to) {
 #' @return List
 #' @importFrom grDevices chull
 #' @noRd
+
 getMinBBox <- function(xy) {
   stopifnot(is.matrix(xy), is.numeric(xy), nrow(xy) >= 2, ncol(xy) == 2)
 
@@ -2508,6 +2537,7 @@ getMinBBox <- function(xy) {
 #' @returns Data frame
 #' @importFrom dplyr bind_rows
 #' @noRd
+
 masks_2_df <- function(masks) {
   # no. of masks
   n_masks <- length(masks)
@@ -2529,6 +2559,7 @@ masks_2_df <- function(masks) {
   return(df)
 }
 
+
 #' @title Get coordinates of active sensors
 #' @description Produces a data frame with coordinates of sensors
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
@@ -2542,6 +2573,7 @@ masks_2_df <- function(masks) {
 #' @examples
 #' coords <- sensor_coords(pressure_data)
 #' @noRd
+
 sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
   # pressure image
   if (pressure_image == "all_active" | pressure_image == "max" |
@@ -2589,6 +2621,7 @@ sensor_coords <- function(pressure_data, pressure_image = "all_active", frame) {
 #' @param output String. "df" dataframe for plotting or "sf" shape poly for analysis
 #' @importFrom sf st_polygon st_coordinates
 #' @noRd
+
 sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
                              frame = NA, output = "sf") {
   # set global variables
@@ -2672,6 +2705,7 @@ sensor_2_polygon <- function(pressure_data, pressure_image = "all_active",
 #' be active
 #' @return Vector
 #' @noRd
+
 force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
   # set global variables
   pedar_insole_areas <- NULL
@@ -2714,6 +2748,7 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
   return(output_df)
 }
 
+
 #' @title plot pedar
 #' @description produces dataframe that plot_pressure uses to plot pedar data
 #' @param pressure_data List.
@@ -2724,6 +2759,7 @@ force_pedar <- function(pressure_data, variable = "force", threshold = 10) {
 #' analyze
 #' @return df
 #' @noRd
+
 plot_pedar <- function(pressure_data, pressure_image = "max",
                        foot_side = "left", step_n) {
   # set global variables
@@ -2806,6 +2842,7 @@ plot_pedar <- function(pressure_data, pressure_image = "max",
 #' longer than break_values
 #' @return Data frame.
 #' @noRd
+
 generate_colors <- function(df, col_type = "default", break_values,
                             break_colors) {
   if (col_type == "default") {
@@ -2840,6 +2877,7 @@ generate_colors <- function(df, col_type = "default", break_values,
 #' @param end String
 #' @importFrom sf st_sfc st_crs st_coordinates
 #' @noRd
+
 st_extend_line <- function(line, distance, end = "BOTH") {
   if (!(end %in% c("BOTH", "HEAD", "TAIL")) | length(end) != 1)
     stop("'end' must be 'BOTH', 'HEAD' or 'TAIL'")
@@ -2877,6 +2915,7 @@ st_extend_line <- function(line, distance, end = "BOTH") {
 #' @return Polygon. sf polygon object
 #' @importFrom sf st_polygon
 #' @noRd
+
 st_line2polygon <- function(mat, distance, direction) {
   # get ends
   if (mat[1, 1] >= mat[nrow(mat), 1]) {dir1 <- "RL"} else {dir1 <- "LR"}
@@ -2912,6 +2951,7 @@ st_line2polygon <- function(mat, distance, direction) {
   mat_poly <- st_polygon(list(mat_pts))
 }
 
+
 #' @title Get toe line
 #' @description Calculates line proximal to toes
 #' @param pressure_data List. First item should be a 3D array covering each
@@ -2920,6 +2960,7 @@ st_line2polygon <- function(mat, distance, direction) {
 #' @importFrom stats na.omit
 #' @importFrom sf st_cast st_join st_sf
 #' @noRd
+
 toe_line <- function(pressure_data) {
   # global variables
   clusterID <- NULL
@@ -3027,6 +3068,7 @@ toe_line <- function(pressure_data) {
   return(toe_line_mat)
 }
 
+
 #' @title edge lines
 #' @description create edge liens for footprint data
 #' @param mat Matrix
@@ -3034,6 +3076,7 @@ toe_line <- function(pressure_data) {
 #' @importFrom sf st_as_sfc st_combine st_coordinates st_convex_hull
 #' @importFrom utils head tail
 #' @noRd
+
 edge_lines <- function(pressure_data, side) {
   # global variables
   x <- y <- x_coord <- y_coord <- me <- sc_df <- NULL
@@ -3104,9 +3147,11 @@ edge_lines <- function(pressure_data, side) {
   return(list(med_side_line, lat_side_line))
 }
 
+
 #' Color binning function
 #' taken from ggplot2 codebase
 #' @noRd
+
 binned_pal <- function(palette) {
   function(x) {
     palette(length(x))
@@ -3114,6 +3159,9 @@ binned_pal <- function(palette) {
 }
 
 
+#' Rotate line
+#' @noRd
+#'
 rot_line <- function(line, ang, cnt) {
   ang_ <- ang * pi /180
   new_line <- (line - cnt) * matrix(c(cos(ang_), sin(ang_),
@@ -3121,7 +3169,8 @@ rot_line <- function(line, ang, cnt) {
   return(new_line)
 }
 
-#' @title Visual masks
+
+#' @title Visualize masks
 #' @description Visualize the existing masks
 #' @author Scott Telfer \email{scott.telfer@gmail.com}
 #' @param pressure_data List. First item is a 3D array covering each timepoint
@@ -3140,7 +3189,9 @@ rot_line <- function(line, ang, cnt) {
 #' }
 #' @noRd
 
-plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[[5]])), image = "max"){
+plot_masks <- function(pressure_data,
+                       visual_list = seq(1, length(pressure_data[[5]])),
+                       image = "max"){
   # global variables
   X <- Y <- NULL
 
@@ -3171,6 +3222,7 @@ plot_masks <- function(pressure_data, visual_list = seq(1, length(pressure_data[
 
   return(g)
 }
+
 
 #' @title Pedar mask regions
 #' @description Creates a mask region from pedar sensel coordinates
@@ -3211,6 +3263,7 @@ pedar_polygon <- function(pressure_data, sensel_list, foot_side){
 #' @title Peak pressure
 #' @description get highest value of sensor in mask
 #' @noRd
+
 pressure_peak <- function(pressure_data, sens_mask_df,
                           mask_sides, output_df, pressure_units) {
   # global variables
@@ -3287,6 +3340,7 @@ pressure_peak <- function(pressure_data, sens_mask_df,
 #' @title Mean regional pressure
 #' @description get average pressure across mask
 #' @noRd
+
 pressure_mean <- function(pressure_data, sens_mask_df, mask_sides,
                           output_df, pressure_units) {
   # global variables
@@ -3378,6 +3432,7 @@ pressure_mean <- function(pressure_data, sens_mask_df, mask_sides,
 #' @title Contact area by mask
 #' @description get contact areas for masks
 #' @noRd
+
 contact_area <- function(pressure_data, sens_mask_df, mask_sides,
                          output_df, area_units) {
   # global variables
@@ -3457,6 +3512,7 @@ contact_area <- function(pressure_data, sens_mask_df, mask_sides,
   # return
   return(output_df)
 }
+
 
 #' @title Pressure time integral (Novel)
 #' @description calculate PTI (as defined by novel) for pressure data

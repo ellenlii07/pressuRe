@@ -26,7 +26,7 @@ of the measurement.}
 \item{threshold}{Numeric. Distance between adjacent mask vertices before
 sharing vertex coordinates}
 
-\item{plot_existing_mask}{Logical. Show exisiting masks}
+\item{plot_existing_mask}{Logical. Show existing masks}
 
 \item{image}{String."max" = footprint of maximum sensors. "mean"
 average value of sensors over time}
@@ -36,12 +36,19 @@ average value of sensors over time}
 \item{preview}{Logical. Show new maks on pressure image}
 }
 \value{
-List New mask is added to the relevant A 3D array covering each
-timepoint of the measurement for the selected region. z dimension represents
-time
+List. Mask(s) are added to pressure data variable
+\itemize{
+  \item pressure_array. 3D array covering each timepoint of the measurement.
+           z dimension represents time
+  \item pressure_system. String defining pressure system
+  \item sens_size. Numeric vector with the dimensions of the sensors
+  \item time. Numeric value for time between measurements
+  \item masks. List
+  \item events. List
+ }
 }
 \description{
-Manually create mask region
+Allows user to manually define mask region
 }
 \examples{
 \dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}

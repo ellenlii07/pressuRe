@@ -4,15 +4,25 @@
 \alias{dpli}
 \title{Dynamic Plantar Loading Index}
 \usage{
-dpli(pressure_data)
+dpli(pressure_data, n_bins)
 }
 \arguments{
 \item{pressure_data}{List. First item is a 3D array covering each timepoint
 of the measurement.}
+
+\item{n_bins}{Numeric. Number of bins used to calculate DPLI}
+}
+\value{
+Data frame. Contains DPLI for each step
 }
 \description{
 Determine Dynamic plantar loading index (DPLI) for
 footprint pressure data
+}
+\examples{
+emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
+pressure_data <- load_emed(emed_data)
+dpli(pressure_data, 10)
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}
