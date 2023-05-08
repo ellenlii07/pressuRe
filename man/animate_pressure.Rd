@@ -28,14 +28,14 @@ measurement. z dimension represents time}
 Animation in gif format
 }
 \description{
-Produce animation (gif) of pressure distribution
+Produces animation (gif) of pressure data
 }
 \examples{
-\dontrun{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 animate_pressure(pressure_data, fps = 10, file_name = "testgif.gif")
-}
+\dontshow{\}) # examplesIf}
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

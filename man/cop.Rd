@@ -14,7 +14,8 @@ of the measurement. z dimension represents time}
 Data frame with x and y coordinates of COP throughout trial
 }
 \description{
-Generates center of pressure coordinates
+Generates xy coordinates for center of pressure during each
+frame of measurement
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")

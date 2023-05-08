@@ -24,8 +24,8 @@ timepoint of the measurement. z dimension represents time.}
  }
 }
 \description{
-Interpolates data over time. Useful for normalizing to stance
-phase, for example
+Resamples pressure data over time. Useful for normalizing to
+stance phase, for example
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")

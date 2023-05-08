@@ -22,9 +22,8 @@ if TRUE, for relevant variables their contribution will be weighted by the
 proportion of the sensor that falls within the mask border}
 
 \item{variable}{String. Variable to be determined. "press_peak_sensor",
-"press_peak_sensor_ts", "press_peak_mask", "press_peak_mask_ts",
-"contact_area_peak", "contact_area_ts", "pti_1", "pti_2",
-"force_time_integral", "force_peak", "force_ts"}
+"press_peak_mask", "contact_area_peak", "pti_1", "pti_2",
+"force_time_integral", "force_peak"}
 
 \item{pressure_units}{String. Default "kPa". Other options: "MPa", "Ncm2"
 (Newtons per square centimeter)}
@@ -33,7 +32,8 @@ proportion of the sensor that falls within the mask border}
 options "m2" (square meters); "mm2" (square millimeters)}
 }
 \value{
-Data frame.
+Data frame. Contains values for each mask plus additional information
+relevant to the data including cycle/step and foot side
 }
 \description{
 Analyze masked regions of pressure data
@@ -42,7 +42,7 @@ Analyze masked regions of pressure data
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
 pressure_data <- load_emed(emed_data)
 pressure_data <- automask(pressure_data)
-mask_analysis(pressure_data, FALSE, variable = "press_peak_sensor")
+mask_analysis(pressure_data, FALSE, variable = "press_peak")
 }
 \author{
 Scott Telfer \email{scott.telfer@gmail.com}

@@ -16,7 +16,8 @@ String. "LEFT" or "RIGHT"
 \description{
 Detects which foot plantar pressure data is from (left or
 right), usually would only be needed for pressure plate data. Generally
-seems to work but may be thrown off by severe deformities
+reliable but may be thrown off by severe deformities or abnormal walking
+patterns
 }
 \examples{
 emed_data <- system.file("extdata", "emed_test.lst", package = "pressuRe")
